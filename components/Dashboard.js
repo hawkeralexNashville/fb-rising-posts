@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Account from './Account'
 import Admin from './Admin'
 
@@ -97,7 +97,7 @@ function PlatformTabs({ selected, onChange }) {
 }
 
 // ─── Scan Controls ───
-function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled }) {
+function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled, onStop }) {
   const btnClass = isScanning ? 'bg-orange-100 text-orange-500 border border-orange-200 cursor-not-allowed animate-pulse-glow' : disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white shadow-sm shadow-orange-500/20 hover:shadow-md'
   return (
     <div className="space-y-3">
@@ -115,6 +115,12 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
           <select value={maxInteractions} onChange={(e) => setMaxInteractions(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{MAX_INTERACTION_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
         </div>
         <button onClick={onScan} disabled={isScanning || disabled} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${btnClass}`}>{Icons.scan}{isScanning ? 'Scanning...' : 'Scan Now'}</button>
+        {isScanning && onStop && (
+          <button onClick={onStop} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+            Stop
+          </button>
+        )}
       </div>
       <p className="text-xs text-slate-400">Shorter time windows pull fewer posts per page, reducing Apify costs.</p>
     </div>
@@ -221,6 +227,7 @@ export default function Dashboard({ supabase, session }) {
   const [publicPages, setPublicPages] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
+  const abortRef = useRef(false)
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
@@ -320,7 +327,12 @@ export default function Dashboard({ supabase, session }) {
   }
 
   // ─── Scan logic ───
+  function stopScan() {
+    abortRef.current = true
+  }
+
   async function runScan(pageUrls, streamId, platform, setStatus, setMessage, setResults, setStats, source) {
+    abortRef.current = false
     const token = session?.access_token; setStatus('starting'); setMessage('Starting scan...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
     try {
       const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow, platform }) })
@@ -330,7 +342,13 @@ export default function Dashboard({ supabase, session }) {
       let status = 'RUNNING'
       let costUsd = null
       while (status === 'RUNNING' || status === 'READY') {
+        if (abortRef.current) {
+          // Try to abort the Apify run
+          try { await fetch(`/api/scan/status?runId=${runId}&abort=true`, { headers: { Authorization: `Bearer ${token}` } }) } catch {}
+          setStatus('idle'); setMessage('Scan stopped.'); return
+        }
         await new Promise((r) => setTimeout(r, 5000))
+        if (abortRef.current) { setStatus('idle'); setMessage('Scan stopped.'); return }
         const statusRes = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } })
         const statusData = await statusRes.json()
         status = statusData.status
@@ -338,6 +356,7 @@ export default function Dashboard({ supabase, session }) {
         if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Scan ${status.toLowerCase()}. Try again.`)
       }
 
+      if (abortRef.current) { setStatus('idle'); setMessage('Scan stopped.'); return }
       setStatus('processing'); setMessage('Analyzing posts...')
       const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
       const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${streamId || ''}&platform=${platform}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
@@ -532,7 +551,7 @@ export default function Dashboard({ supabase, session }) {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{PLATFORMS[quickPlatform].label} URL</label>
                   <input type="text" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} placeholder={PLATFORMS[quickPlatform].placeholder} className="w-full max-w-lg px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all" />
                 </div>
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} onStop={stopScan} />
               </form>
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
@@ -659,7 +678,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <div className="mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
@@ -701,7 +720,7 @@ export default function Dashboard({ supabase, session }) {
               )}
 
               <div className="pt-4 border-t border-slate-200 mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />

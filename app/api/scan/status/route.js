@@ -7,6 +7,16 @@ export async function GET(request) {
 
     if (!runId) return NextResponse.json({ error: 'Missing runId' }, { status: 400 })
 
+    // Abort the run if requested
+    const abort = searchParams.get('abort')
+    if (abort === 'true') {
+      await fetch(
+        `https://api.apify.com/v2/actor-runs/${runId}/abort?token=${process.env.APIFY_API_TOKEN}`,
+        { method: 'POST' }
+      )
+      return NextResponse.json({ status: 'ABORTED', costUsd: null })
+    }
+
     const res = await fetch(
       `https://api.apify.com/v2/actor-runs/${runId}?token=${process.env.APIFY_API_TOKEN}`
     )
