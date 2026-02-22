@@ -12,7 +12,7 @@ export default function Admin({ session }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin', {
+      const res = await fetch('/api/admin/users', {
         headers: { Authorization: `Bearer ${session.access_token}` }
       })
       if (!res.ok) {
