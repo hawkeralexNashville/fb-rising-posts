@@ -19,6 +19,15 @@ function parseApifyError(status, body) {
   return body?.error?.message || body?.error || 'Failed to start Apify scraper. Check your Apify account.'
 }
 
+// Map time window (hours) to how many posts to pull per page
+function getResultsLimit(timeWindowHours) {
+  if (timeWindowHours <= 2) return 5
+  if (timeWindowHours <= 6) return 10
+  if (timeWindowHours <= 12) return 15
+  if (timeWindowHours <= 24) return 20
+  return 30
+}
+
 export async function POST(request) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
@@ -37,7 +46,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { pageUrls } = await request.json()
+    const { pageUrls, timeWindowHours } = await request.json()
 
     if (!pageUrls?.length) {
       return NextResponse.json({ error: 'No page URLs provided' }, { status: 400 })
@@ -47,6 +56,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Apify API token not configured. Add APIFY_API_TOKEN to your environment variables.' }, { status: 500 })
     }
 
+    const resultsLimit = getResultsLimit(timeWindowHours || 24)
+
     const apifyRes = await fetch(
       `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${process.env.APIFY_API_TOKEN}`,
       {
@@ -54,7 +65,7 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: pageUrls.map((url) => ({ url })),
-          resultsLimit: 30,
+          resultsLimit,
         }),
       }
     )
@@ -74,7 +85,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No run ID returned from Apify' }, { status: 500 })
     }
 
-    return NextResponse.json({ runId })
+    return NextResponse.json({ runId, resultsLimit })
   } catch (err) {
     console.error('Scan start error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

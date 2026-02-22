@@ -6,12 +6,14 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const runId = searchParams.get('runId')
     const streamId = searchParams.get('streamId')
+    const timeWindowHours = parseFloat(searchParams.get('timeWindowHours')) || 24
+    const minInteractions = parseInt(searchParams.get('minInteractions')) || 0
+    const maxInteractions = parseInt(searchParams.get('maxInteractions')) || 999999999
 
     if (!runId) {
       return NextResponse.json({ error: 'Missing runId' }, { status: 400 })
     }
 
-    // Verify user
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,7 +30,7 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // ─── Step 1: Get Apify run details to find dataset ID ───
+    // ─── Step 1: Get dataset ID ───
     const runRes = await fetch(
       `https://api.apify.com/v2/actor-runs/${runId}?token=${process.env.APIFY_API_TOKEN}`
     )
@@ -39,32 +41,26 @@ export async function GET(request) {
       return NextResponse.json({ error: 'No dataset found for this run' }, { status: 500 })
     }
 
-    // ─── Step 2: Fetch scraped posts from Apify ───
+    // ─── Step 2: Fetch scraped posts ───
     const dataRes = await fetch(
       `https://api.apify.com/v2/datasets/${datasetId}/items?token=${process.env.APIFY_API_TOKEN}&limit=500`
     )
     const rawPosts = await dataRes.json()
 
     if (!Array.isArray(rawPosts) || rawPosts.length === 0) {
-      return NextResponse.json({ posts: [], totalScraped: 0 })
+      return NextResponse.json({ posts: [], totalScraped: 0, filteredOut: 0 })
     }
 
     // ─── Step 3: Normalize post data ───
-    // Apify's Facebook Posts Scraper can return varying field names
     const normalizedPosts = rawPosts.map((post) => {
       const reactions = post.likesCount || post.likes || post.reactionsCount || 0
       const comments = post.commentsCount || post.comments || 0
       const shares = post.sharesCount || post.shares || 0
       const total = reactions + comments + shares
 
-      // Try to extract a stable post ID from the URL
       const postUrl = post.postUrl || post.url || ''
       const postId = post.postId || postUrl || Math.random().toString(36).slice(2)
-
-      // Try to get the timestamp
       const postedAt = post.time || post.postTimestamp || post.timestamp || post.date || null
-
-      // Get page info
       const pageName = post.pageName || post.authorName || post.pageTitle || ''
       const pageUrl = post.pageUrl || ''
 
@@ -82,6 +78,8 @@ export async function GET(request) {
       }
     }).filter((p) => p.post_id)
 
+    const totalScraped = normalizedPosts.length
+
     // ─── Step 4: Load user settings ───
     const { data: settingsRow } = await supabase
       .from('user_settings')
@@ -92,7 +90,6 @@ export async function GET(request) {
     const settings = {
       min_velocity: settingsRow?.min_velocity ?? 50,
       min_delta: settingsRow?.min_delta ?? 20,
-      max_post_age_hours: settingsRow?.max_post_age_hours ?? 48,
     }
 
     // ─── Step 5: Load previous snapshots for delta detection ───
@@ -101,10 +98,9 @@ export async function GET(request) {
       .from('post_snapshots')
       .select('post_id, total_interactions, scraped_at')
       .eq('user_id', user.id)
-      .in('post_id', postIds.slice(0, 200)) // Supabase IN has limits
+      .in('post_id', postIds.slice(0, 200))
       .order('scraped_at', { ascending: false })
 
-    // Build a map of the most recent snapshot per post
     const prevMap = {}
     if (prevSnapshots) {
       for (const snap of prevSnapshots) {
@@ -131,64 +127,79 @@ export async function GET(request) {
       scraped_at: now,
     }))
 
-    // Insert in batches of 50 to avoid payload limits
     for (let i = 0; i < snapshotsToInsert.length; i += 50) {
       await supabase
         .from('post_snapshots')
         .insert(snapshotsToInsert.slice(i, i + 50))
     }
 
-    // ─── Step 7: Calculate velocity and delta, filter rising posts ───
+    // ─── Step 7: Filter and score rising posts ───
     const risingPosts = []
     const nowMs = Date.now()
+    let filteredOut = 0
 
     for (const post of normalizedPosts) {
-      // Skip posts with no timestamp or too old
+      // ── Filter 1: Time window ──
       let ageHours = null
       if (post.posted_at) {
         ageHours = (nowMs - new Date(post.posted_at).getTime()) / 3600000
-        if (ageHours > settings.max_post_age_hours) continue
-        if (ageHours < 0) ageHours = 0.1 // Future date edge case
+        if (ageHours > timeWindowHours) {
+          filteredOut++
+          continue
+        }
+        if (ageHours < 0) ageHours = 0.1
       }
 
-      // Calculate velocity (interactions per hour)
+      // ── Filter 2: Interaction range ──
+      if (post.total_interactions < minInteractions) {
+        filteredOut++
+        continue
+      }
+      if (post.total_interactions > maxInteractions) {
+        filteredOut++
+        continue
+      }
+
+      // ── Calculate velocity ──
       const velocity = ageHours && ageHours > 0
         ? post.total_interactions / ageHours
         : null
 
-      // Calculate delta from previous snapshot
+      // ── Calculate delta ──
       const prev = prevMap[post.post_id]
       let delta = null
       if (prev) {
         delta = post.total_interactions - prev.total_interactions
       }
 
-      // Determine if this post is "rising"
+      // ── Filter 3: Is it rising? ──
       let isRising = false
 
       if (prev && delta !== null) {
-        // We have previous data: use delta
+        // Have previous data: use delta
         isRising = delta >= settings.min_delta
       } else if (velocity !== null) {
-        // First time seeing this post: use velocity
+        // First time: use velocity
         isRising = velocity >= settings.min_velocity
       } else {
-        // No timestamp and no previous data: skip
-        // Unless it has a very high interaction count (catch-all)
+        // No timestamp, no history: use interaction floor as catch-all
         isRising = post.total_interactions >= settings.min_velocity * 2
       }
 
-      if (isRising) {
-        risingPosts.push({
-          ...post,
-          velocity: velocity,
-          delta: delta,
-          age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null,
-        })
+      if (!isRising) {
+        filteredOut++
+        continue
       }
+
+      risingPosts.push({
+        ...post,
+        velocity,
+        delta,
+        age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null,
+      })
     }
 
-    // Sort by velocity (highest first), then by delta
+    // Sort by velocity (highest first), delta as tiebreaker
     risingPosts.sort((a, b) => {
       const aScore = (a.velocity || 0) + (a.delta || 0) * 2
       const bScore = (b.velocity || 0) + (b.delta || 0) * 2
@@ -197,7 +208,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       posts: risingPosts,
-      totalScraped: normalizedPosts.length,
+      totalScraped,
+      filteredOut,
     })
   } catch (err) {
     console.error('Results processing error:', err)
