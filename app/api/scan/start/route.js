@@ -10,7 +10,15 @@ function parseApifyError(status, body) {
   return body?.error?.message || body?.error || 'Failed to start Apify scraper. Check your Apify account.'
 }
 
-function getResultsLimit(timeWindowHours) {
+function getResultsLimit(timeWindowHours, scanType) {
+  if (scanType === 'groups') {
+    // Groups need more posts — we're filtering by engagement, not velocity
+    if (timeWindowHours <= 6) return 50
+    if (timeWindowHours <= 12) return 75
+    if (timeWindowHours <= 24) return 100
+    if (timeWindowHours <= 48) return 150
+    return 200
+  }
   if (timeWindowHours <= 1) return 5
   if (timeWindowHours <= 2) return 5
   if (timeWindowHours <= 6) return 10
@@ -75,12 +83,12 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { pageUrls, timeWindowHours, platform = 'facebook' } = await request.json()
+    const { pageUrls, timeWindowHours, platform = 'facebook', scanType = 'rising' } = await request.json()
 
     if (!pageUrls?.length) return NextResponse.json({ error: 'No URLs provided' }, { status: 400 })
     if (!process.env.APIFY_API_TOKEN) return NextResponse.json({ error: 'Apify API token not configured.' }, { status: 500 })
 
-    const resultsLimit = getResultsLimit(timeWindowHours || 24)
+    const resultsLimit = getResultsLimit(timeWindowHours || 24, scanType)
     const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours || 24)
 
     const apifyRes = await fetch(

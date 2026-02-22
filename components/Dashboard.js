@@ -566,7 +566,7 @@ export default function Dashboard({ supabase, session }) {
     const token = session?.access_token
     setGroupScanStatus('starting'); setGroupScanMessage('Starting group scan...'); setGroupPosts([]); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
     try {
-      const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: groupPages.map(p => p.url), timeWindowHours: groupTimeWindow, platform: 'facebook' }) })
+      const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: groupPages.map(p => p.url), timeWindowHours: groupTimeWindow, platform: 'facebook', scanType: 'groups' }) })
       if (!startRes.ok) { let errBody; try { errBody = await startRes.json() } catch { errBody = {} }; throw new Error(errBody?.userMessage || errBody?.error || 'Failed to start scan') }
       const { runId } = await startRes.json()
       if (fg()) { setGroupScanStatus('scanning'); setGroupScanMessage('Scanning groups...') }
