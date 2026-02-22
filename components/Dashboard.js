@@ -23,6 +23,7 @@ const Icons = {
   folder: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>,
   user: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
   dollar: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>,
+  globe: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg>,
 }
 
 const SCANNING_MESSAGES = [
@@ -205,15 +206,29 @@ export default function Dashboard({ supabase, session }) {
   const [savedScans, setSavedScans] = useState([])
   const [selectedSavedScan, setSelectedSavedScan] = useState(null)
   const [settings, setSettings] = useState({ min_velocity: 50, min_delta: 20 })
+  const [publicStreams, setPublicStreams] = useState([])
+  const [selectedPublicStream, setSelectedPublicStream] = useState(null)
+  const [publicPages, setPublicPages] = useState([])
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId) }, [selectedStreamId])
 
-  async function loadStreams() { const { data } = await supabase.from('streams').select('*').order('created_at', { ascending: true }); setStreams(data || []) }
+  async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
+  async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
+  async function toggleStreamPublic(streamId, isPublic) {
+    const displayName = session?.user?.email?.split('@')[0] || 'Anonymous'
+    const { error } = await supabase.from('streams').update({ is_public: isPublic, creator_name: isPublic ? displayName : null }).eq('id', streamId)
+    if (!error) { setStreams(streams.map(s => s.id === streamId ? { ...s, is_public: isPublic, creator_name: isPublic ? displayName : null } : s)); loadPublicStreams() }
+  }
+  async function selectPublicStream(stream) {
+    setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null)
+    const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', stream.id).order('created_at', { ascending: true })
+    setPublicPages(data || [])
+  }
   async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
 
   async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
@@ -314,6 +329,40 @@ export default function Dashboard({ supabase, session }) {
   const isScanning = ['starting', 'scanning', 'processing'].includes(scanStatus)
   const isQuickScanning = ['starting', 'scanning', 'processing'].includes(quickScanStatus)
 
+  async function startPublicStreamScan() {
+    if (publicPages.length === 0) { setScanMessage('This stream has no pages.'); setScanStatus('error'); return }
+    const platforms = [...new Set(publicPages.map(p => p.platform || 'facebook'))]
+    if (platforms.length === 1) {
+      await runScan(publicPages.map(p => p.url), null, platforms[0], setScanStatus, setScanMessage, setRisingPosts, setScanStats, selectedPublicStream?.name)
+    } else {
+      setScanStatus('starting'); setScanMessage('Starting multi-platform scan...'); setRisingPosts([]); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
+      let allPosts = []; let totalScraped = 0; let totalFiltered = 0; let totalCost = 0
+      try {
+        for (const plat of platforms) {
+          const platPages = publicPages.filter(p => (p.platform || 'facebook') === plat)
+          setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
+          const token = session?.access_token
+          const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: platPages.map(p => p.url), timeWindowHours: timeWindow, platform: plat }) })
+          if (!startRes.ok) { const err = await startRes.json(); throw new Error(err?.userMessage || err?.error || `Failed to start ${plat} scan`) }
+          const { runId } = await startRes.json()
+          setScanStatus('scanning')
+          let status = 'RUNNING'
+          while (status === 'RUNNING' || status === 'READY') { await new Promise(r => setTimeout(r, 5000)); const s = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } }); const sd = await s.json(); status = sd.status; if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`${plat} scan ${status.toLowerCase()}.`) }
+          setScanStatus('processing')
+          const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
+          const resultsRes = await fetch(`/api/scan/results?runId=${runId}&platform=${plat}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
+          if (!resultsRes.ok) continue
+          const { posts, totalScraped: ts, filteredOut: fo, costUsd } = await resultsRes.json()
+          allPosts = [...allPosts, ...posts]; totalScraped += ts; totalFiltered += fo; totalCost += (costUsd || 0)
+        }
+        allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
+        setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
+        setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered }, null, selectedPublicStream?.name)
+      } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
+    }
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-50">
       {/* ─── Sidebar ─── */}
@@ -350,7 +399,7 @@ export default function Dashboard({ supabase, session }) {
           {streams.map((stream) => (
             <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'streams' && selectedStreamId === stream.id ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
               onClick={() => { setView('streams'); setSelectedStreamId(stream.id); setSelectedSavedScan(null) }}>
-              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.stream}</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
+              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.stream}</span><span className="text-sm font-medium truncate">{stream.name}</span>{stream.is_public && <span className="shrink-0 text-emerald-400" title="Public">{Icons.globe}</span>}</div>
               <button onClick={(e) => { e.stopPropagation(); deleteStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
             </div>
           ))}
@@ -362,6 +411,18 @@ export default function Dashboard({ supabase, session }) {
                   onClick={() => loadSavedScan(scan.id)}>
                   <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.folder}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{scan.name}</span><span className="text-xs text-slate-400">{scan.rising_count} rising · {timeAgo(scan.created_at)}</span></div></div>
                   <button onClick={(e) => { e.stopPropagation(); deleteSavedScan(scan.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all shrink-0 ml-1">{Icons.trash}</button>
+                </div>
+              ))}
+            </>
+          )}
+
+          {publicStreams.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Public Streams</span></div>
+              {publicStreams.map((stream) => (
+                <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'public' && selectedPublicStream?.id === stream.id ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                  onClick={() => selectPublicStream(stream)}>
+                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0 text-emerald-500">{Icons.globe}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{stream.name}</span><span className="text-xs text-slate-400">by {stream.creator_name || 'Anonymous'}</span></div></div>
                 </div>
               ))}
             </>
@@ -441,7 +502,14 @@ export default function Dashboard({ supabase, session }) {
         {view === 'streams' && selectedStream && (
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
-              <h2 className="text-xl font-bold text-slate-900 mb-5">{selectedStream.name}</h2>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-bold text-slate-900">{selectedStream.name}</h2>
+                <button onClick={() => toggleStreamPublic(selectedStream.id, !selectedStream.is_public)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${selectedStream.is_public ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'}`}>
+                  {Icons.globe}
+                  {selectedStream.is_public ? 'Public' : 'Make Public'}
+                </button>
+              </div>
 
               <div className="mb-5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 block">Monitored Pages ({pages.length})</span>
@@ -474,6 +542,48 @@ export default function Dashboard({ supabase, session }) {
 
               <div className="pt-4 border-t border-slate-200 mb-5">
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} />
+              </div>
+
+              <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
+              {isScanning && <ScanningAnimation />}
+              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
+              {scanStatus === 'done' && risingPosts.length === 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Public Stream View ─── */}
+        {view === 'public' && selectedPublicStream && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 max-w-4xl">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-emerald-500">{Icons.globe}</span>
+                <h2 className="text-xl font-bold text-slate-900">{selectedPublicStream.name}</h2>
+                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-medium text-emerald-600">Public</span>
+              </div>
+              <p className="text-sm text-slate-400 mb-5">Shared by {selectedPublicStream.creator_name || 'Anonymous'}</p>
+
+              {publicPages.length > 0 && (
+                <div className="mb-5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 block">Monitored Pages ({publicPages.length})</span>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {publicPages.map((page) => {
+                      const p = PLATFORMS[page.platform] || PLATFORMS.facebook
+                      return (
+                        <div key={page.id} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm">
+                          <span className="text-sm" title={p.label}>{p.icon}</span>
+                          <span className="text-slate-700">{page.display_name}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-slate-200 mb-5">
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
