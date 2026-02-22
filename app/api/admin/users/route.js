@@ -42,6 +42,7 @@ export async function GET(request) {
     const { data: scans } = await adminClient.from('saved_scans').select('user_id, id')
     const { data: streams } = await adminClient.from('streams').select('user_id, id')
 
+    // Get cost from post_snapshots or estimate from scan count
     const scanCountMap = {}
     if (scans) { for (const s of scans) { scanCountMap[s.user_id] = (scanCountMap[s.user_id] || 0) + 1 } }
 
@@ -53,7 +54,7 @@ export async function GET(request) {
       email: u.email || 'Unknown',
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at,
-      scans: scanCountMap[u.id] || 0,
+      scan_count: scanCountMap[u.id] || 0,
       streams: streamCountMap[u.id] || 0,
     }))
 
