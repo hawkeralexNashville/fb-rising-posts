@@ -191,23 +191,21 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   )
 }
 
-// ─── Batch Strategy Panel (Daily Publishing Plan) ───
+// ─── Batch Strategy Panel ───
 function BatchStrategyPanel({ strategy, loading, error, posts }) {
   const [copiedId, setCopiedId] = useState(null)
-  const copyText = (text, id) => { navigator.clipboard.writeText(text.replace(/\\n/g, '\n')); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }
+  const [expandedMoves, setExpandedMoves] = useState({})
+  const copyText = (text, id) => { navigator.clipboard.writeText((text || '').replace(/\\n/g, '\n')); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }
+  const toggleMove = (key) => setExpandedMoves(prev => ({ ...prev, [key]: prev[key] === undefined ? false : !prev[key] }))
 
   if (loading) return (
     <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6 mb-5 animate-pulse">
-      <div className="flex items-center gap-3"><span className="text-xl">📋</span><span className="text-base font-semibold text-violet-700">Analyzing {posts?.length || 0} trending posts…</span></div>
-      <p className="text-sm text-violet-500 mt-2">Building your publishing plan. 15-30 seconds.</p>
+      <div className="flex items-center gap-3"><span className="text-xl">⚡</span><span className="text-base font-semibold text-violet-700">Analyzing {posts?.length || 0} trending posts…</span></div>
+      <p className="text-sm text-violet-500 mt-2">Building exploitation strategies. 15-30 seconds.</p>
     </div>
   )
-  if (error) return (
-    <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-5">
-      <p className="text-sm text-red-600">{error}</p>
-    </div>
-  )
-  if (!strategy?.posts?.length) return null
+  if (error) return <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-5"><p className="text-sm text-red-600">{error}</p></div>
+  if (!strategy?.opportunities?.length) return null
 
   const purposeStyle = {
     'momentum': { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: '🚀' },
@@ -215,108 +213,153 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
     'authority': { color: 'bg-purple-50 text-purple-600 border-purple-200', icon: '🏛️' },
     'traffic': { color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: '🔗' },
     'viral': { color: 'bg-pink-50 text-pink-600 border-pink-200', icon: '🔥' },
+    'engagement': { color: 'bg-amber-50 text-amber-600 border-amber-200', icon: '💬' },
     'breaking': { color: 'bg-red-50 text-red-600 border-red-200', icon: '⚡' },
   }
-  const linkLabel = { 'inject immediately': '🔗 Link now', 'wait for momentum': '⏳ Link after traction', 'no link needed': '—' }
+  const leverColor = {
+    'anger': 'text-red-500', 'outrage': 'text-red-500', 'fear': 'text-amber-600', 'wallet pain': 'text-emerald-600',
+    'curiosity': 'text-blue-500', 'identity': 'text-purple-500', 'aspiration': 'text-teal-500', 'hope': 'text-emerald-500',
+    'nostalgia': 'text-amber-500',
+  }
+  const CopyBtn = ({ text, id, label }) => (
+    <button onClick={() => copyText(text, id)}
+      className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${copiedId === id ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400 hover:text-violet-600 hover:bg-violet-50'}`}>
+      {copiedId === id ? '✓ Copied' : label || 'Copy'}
+    </button>
+  )
 
   return (
-    <div className="mb-5 space-y-4">
+    <div className="mb-5 space-y-5">
       <div className="flex items-center gap-2">
-        <span className="text-xl">📋</span>
-        <h3 className="text-lg font-bold text-slate-900">Publishing Plan</h3>
-        <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{strategy.posts.length} post{strategy.posts.length !== 1 ? 's' : ''}</span>
+        <span className="text-xl">⚡</span>
+        <h3 className="text-lg font-bold text-slate-900">Strategic Opportunities</h3>
+        <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{strategy.opportunities.length} found</span>
       </div>
 
       {/* Skip list */}
       {strategy.skip?.length > 0 && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Skip These</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Not Worth Exploiting</p>
           {strategy.skip.map((s, i) => <p key={i} className="text-sm text-slate-500 mb-1 last:mb-0">🚫 {s}</p>)}
         </div>
       )}
 
-      {strategy.posts.map((post, i) => {
-        const ps = purposeStyle[post.purpose] || { color: 'bg-slate-50 text-slate-600 border-slate-200', icon: '📝' }
-        const displayCopy = (post.copy || '').replace(/\\n/g, '\n')
-        const postId = `post-${post.order || i}`
-        return (
-          <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-colors">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-bold text-slate-300">#{post.order || i + 1}</span>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ps.color}`}>{ps.icon} {post.purpose}</span>
-                {post.format && <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{post.format}</span>}
-                {post.link_strategy && linkLabel[post.link_strategy] && linkLabel[post.link_strategy] !== '—' && (
-                  <span className="text-xs text-slate-400">{linkLabel[post.link_strategy]}</span>
-                )}
+      {/* Opportunities */}
+      {strategy.opportunities.map((opp, oi) => (
+        <div key={oi} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          {/* Opportunity header */}
+          <div className="px-5 py-4 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-slate-300">#{opp.order || oi + 1}</span>
+                {opp.emotional_lever && <span className={`text-xs font-bold uppercase ${leverColor[opp.emotional_lever] || 'text-slate-500'}`}>{opp.emotional_lever}</span>}
+                {opp.move_type && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{opp.move_type}</span>}
               </div>
-              <button onClick={() => copyText(displayCopy, postId)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copiedId === postId ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-white border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300'}`}>
-                {copiedId === postId ? (
-                  <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg> Copied!</>
-                ) : (
-                  <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg> Copy Post</>
-                )}
-              </button>
             </div>
-
-            {/* Headline + why */}
-            {(post.headline || post.why_this_wins) && (
-              <div className="px-5 pt-4 pb-0 space-y-1">
-                {post.headline && <p className="text-base font-bold text-slate-900">{post.headline}</p>}
-                {post.why_this_wins && <p className="text-xs text-slate-400 italic">{post.why_this_wins}</p>}
-              </div>
-            )}
-
-            {/* Post copy */}
-            <div className="px-5 py-4">
-              <div className="whitespace-pre-wrap text-[15px] text-slate-800 leading-relaxed">{displayCopy}</div>
-            </div>
-
-            {/* Engagement question, pinned comment, monetization */}
-            {(post.engagement_question || post.pinned_comment || post.monetization_instruction) && (
-              <div className="px-5 pb-4 space-y-2">
-                {post.engagement_question && (
-                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
-                    <span className="text-xs mt-0.5">💬</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-amber-500 mb-0.5">Engagement Question</p>
-                      <p className="text-sm text-slate-700">{post.engagement_question}</p>
-                    </div>
-                    <button onClick={() => copyText(post.engagement_question, `eq-${i}`)}
-                      className={`shrink-0 text-xs px-2 py-1 rounded transition-all ${copiedId === `eq-${i}` ? 'text-emerald-500' : 'text-amber-300 hover:text-amber-500'}`}>
-                      {copiedId === `eq-${i}` ? '✓' : 'Copy'}
-                    </button>
-                  </div>
-                )}
-                {post.pinned_comment && (
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
-                    <span className="text-xs mt-0.5">📌</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-blue-500 mb-0.5">Pinned Comment</p>
-                      <p className="text-sm text-slate-700">{post.pinned_comment}</p>
-                    </div>
-                    <button onClick={() => copyText(post.pinned_comment, `pin-${i}`)}
-                      className={`shrink-0 text-xs px-2 py-1 rounded transition-all ${copiedId === `pin-${i}` ? 'text-emerald-500' : 'text-blue-300 hover:text-blue-500'}`}>
-                      {copiedId === `pin-${i}` ? '✓' : 'Copy'}
-                    </button>
-                  </div>
-                )}
-                {post.monetization_instruction && (
-                  <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
-                    <span className="text-xs mt-0.5">💰</span>
-                    <div>
-                      <p className="text-xs font-semibold text-emerald-500 mb-0.5">Monetization</p>
-                      <p className="text-sm text-slate-600">{post.monetization_instruction}</p>
-                    </div>
-                  </div>
-                )}
+            {opp.source_summary && <p className="text-sm text-slate-600 mb-1.5">{opp.source_summary}</p>}
+            {opp.why_its_working && (
+              <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-700"><span className="font-semibold">🧠 Why it's working:</span> {opp.why_its_working}</p>
               </div>
             )}
           </div>
-        )
-      })}
+
+          {/* Moves */}
+          <div className="divide-y divide-slate-100">
+            {(opp.moves || []).map((move, mi) => {
+              const moveKey = `${oi}-${mi}`
+              const isExpanded = expandedMoves[moveKey] !== false
+              const ps = purposeStyle[move.purpose] || { color: 'bg-slate-50 text-slate-600 border-slate-200', icon: '📝' }
+              const c = move.creative || {}
+              const displayBody = (c.body || '').replace(/\\n/g, '\n')
+              return (
+                <div key={mi} className="px-5 py-4">
+                  <button onClick={() => toggleMove(moveKey)} className="w-full flex items-center justify-between mb-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-violet-500 bg-violet-50 px-2 py-0.5 rounded">{move.strategy}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${ps.color}`}>{ps.icon} {move.purpose}</span>
+                      {move.format && <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">{move.format}</span>}
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                  {move.why_this_works && <p className="text-xs text-slate-400 mt-1 mb-2 italic">{move.why_this_works}</p>}
+
+                  {isExpanded && (
+                    <div className="mt-3 space-y-3">
+                      {/* Headline */}
+                      {c.headline && (
+                        <div className="flex items-start justify-between gap-2 bg-slate-50 rounded-xl px-4 py-3">
+                          <div>
+                            <p className="text-base font-bold text-slate-900">{c.headline}</p>
+                            {c.subheadline && <p className="text-sm text-slate-500 mt-0.5">{c.subheadline}</p>}
+                          </div>
+                          <CopyBtn text={c.headline + (c.subheadline ? '\n' + c.subheadline : '')} id={`h-${moveKey}`} />
+                        </div>
+                      )}
+
+                      {/* Visual direction */}
+                      {c.visual_direction && (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
+                          <p className="text-xs text-indigo-600"><span className="font-semibold">🎨 Visual:</span> {c.visual_direction}</p>
+                        </div>
+                      )}
+
+                      {/* Body / copy */}
+                      {displayBody && (
+                        <div className="relative">
+                          <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                            <div className="whitespace-pre-wrap text-[15px] text-slate-800 leading-relaxed">{displayBody}</div>
+                          </div>
+                          <div className="absolute top-2 right-2"><CopyBtn text={displayBody} id={`b-${moveKey}`} label="Copy Post" /></div>
+                        </div>
+                      )}
+
+                      {/* Poll options */}
+                      {c.poll_options?.length > 0 && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                          <p className="text-xs font-semibold text-blue-500 mb-2">📊 Poll Options</p>
+                          {c.poll_options.map((opt, pi) => (
+                            <div key={pi} className="flex items-center gap-2 py-1">
+                              <span className="w-5 h-5 rounded-full border-2 border-blue-300 shrink-0 flex items-center justify-center text-xs text-blue-400">{pi + 1}</span>
+                              <span className="text-sm text-slate-700">{opt}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Bottom row: engagement, pinned, monetization */}
+                      {c.engagement_question && (
+                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
+                          <span className="text-xs mt-0.5">💬</span>
+                          <p className="text-sm text-slate-700 flex-1">{c.engagement_question}</p>
+                          <CopyBtn text={c.engagement_question} id={`eq-${moveKey}`} />
+                        </div>
+                      )}
+                      {c.pinned_comment && (
+                        <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
+                          <span className="text-xs mt-0.5">📌</span>
+                          <div className="flex-1"><p className="text-xs font-semibold text-blue-500 mb-0.5">Pinned Comment</p><p className="text-sm text-slate-700">{c.pinned_comment}</p></div>
+                          <CopyBtn text={c.pinned_comment} id={`pin-${moveKey}`} />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {c.link_strategy && c.link_strategy !== 'no link' && (
+                          <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1">
+                            {c.link_strategy === 'inject immediately' ? '🔗 Link now' : c.link_strategy === 'wait for momentum' ? '⏳ Link after traction' : c.link_strategy === 'soft CTA in pinned comment' ? '📌 Soft CTA' : c.link_strategy}
+                          </span>
+                        )}
+                        {c.monetization_instruction && (
+                          <span className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">💰 {c.monetization_instruction}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
