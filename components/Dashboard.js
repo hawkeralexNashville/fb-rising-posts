@@ -228,6 +228,8 @@ export default function Dashboard({ supabase, session }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
   const abortRef = useRef(false)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
@@ -259,13 +261,23 @@ export default function Dashboard({ supabase, session }) {
 
   async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
   async function deleteStream(id) { if (!confirm('Delete this stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id)); if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) } }
+  function showToast(msg, type = 'success') {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 2500)
+  }
+
   async function addPage(e) {
     e.preventDefault(); if (!newPageUrl.trim()) return
     let url = newPageUrl.trim()
     const plat = newPagePlatform
     if (!url.startsWith('http')) url = PLATFORMS[plat].urlPrefix + url.replace(/^[@r\/]+/, '')
+    // Check for duplicates
+    const existing = pages.find(p => p.url.replace(/\/$/, '').toLowerCase() === url.replace(/\/$/, '').toLowerCase())
+    if (existing) { showToast(`"${existing.display_name}" is already in this stream.`, 'error'); return }
     const { data, error } = await supabase.from('monitored_pages').insert({ user_id: userId, stream_id: selectedStreamId, url, display_name: newPageName.trim() || url.split('.com/')[1]?.replace(/^r\//, '') || url, platform: plat }).select().single()
-    if (!error && data) { setPages([...pages, data]); setNewPageUrl(''); setNewPageName('') }
+    if (!error && data) { setPages([...pages, data]); setNewPageUrl(''); setNewPageName(''); showToast('Page added!') }
+    else if (error) { showToast('Failed to add page.', 'error') }
   }
   async function deletePage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setPages(pages.filter((p) => p.id !== id)) }
 
@@ -448,6 +460,11 @@ export default function Dashboard({ supabase, session }) {
 
   return (
     <div className="min-h-screen flex bg-slate-50">
+      {toast && (
+        <div className={`fixed top-5 right-5 z-50 px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg transition-all animate-slide-up ${toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>
+          {toast.msg}
+        </div>
+      )}
       {/* ─── Sidebar ─── */}
       <div className="w-72 bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0">
         <div className="p-5 border-b border-slate-100">
