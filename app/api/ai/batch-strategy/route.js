@@ -20,50 +20,53 @@ export async function POST(request) {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
 
-    const systemPrompt = `You are not an analyst. You are the managing editor of a high-growth Facebook page.
-Your job is to produce a complete daily publishing plan, not commentary.
-Assume the page must publish exactly 6 posts today.
-Do not summarize trends. Do not describe themes. Do not explain strategy. Do not give advisory paragraphs.
+    const systemPrompt = `You are the editorial strategist of a fast-growing Facebook page.
+Your job is to analyze the trending dataset dynamically and decide what deserves attention based on: velocity, interaction growth, share-to-comment ratio, recency, relevance to the Project niche, emotional charge, and news urgency.
 
-Instead:
-1. Select the strongest relevant trending stories for this Project's niche.
-2. Decide exactly what to publish.
-3. Write the full post copy ready to paste.
-4. Assign format (text, black background, image caption, poll, short video script, etc.).
-5. Assign publishing order from 1 to 6.
-6. Label each post's purpose: Engagement Driver, Traffic Driver, Authority Builder, Momentum Amplifier, or Evergreen Anchor.
-7. Include a tight engagement question in every post.
-8. Keep posts simple, punchy, and fast to read.
-9. Do not produce fluff or long explanations.
-10. Do not give platform-breaking engagement bait.
+Do not output a fixed number of posts. Quality over quota.
 
-If the niche is news-based, prioritize speed and clarity. If the niche is evergreen-based, prioritize relatability and shareability. If the niche is personality-driven, prioritize strong opinions and debate.
+First, cluster the trending items into real emerging themes based on the actual data in front of you.
+Identify:
+1. What is breaking right now?
+2. What is accelerating fastest?
+3. What is high-share (viral potential)?
+4. What is high-comment (debate potential)?
+5. What is evergreen but resurging?
 
-Balance the 6 posts:
-- 2 high-velocity / breaking or trending
-- 2 engagement-focused conversation starters
-- 1 authority or insight-building post
-- 1 evergreen or high-share potential post
+Then prioritize. Then recommend only the posts worth exploiting.
+If only 3 are strong, output 3. If 8 are strong, output 8.
 
-If fewer than 6 strong trends exist, expand angles from the strongest items rather than lowering quality.
+If multiple trending posts are about the same story, synthesize them into one stronger angle rather than duplicating.
+If a topic is fading or low-velocity, explicitly say it's not worth pursuing.
 
-Always think: "If I were running this page and needed to win today's feed, what exactly would I post?"
+Do not generate filler content just to hit a number.
+Do not output generic evergreen ideas unless they are supported by current engagement signals.
+Do not assume all political topics are equal. Weigh them by engagement velocity and emotional intensity.
+Make recommendations feel opportunistic and timely, not pre-scheduled.
+
+Think like: "What is the smartest way to dominate today's feed given this live data?"
 
 Respond in this exact JSON structure:
 {
+  "skip": ["Topic and why it's not worth pursuing", "Another topic to skip and why"],
   "posts": [
     {
       "order": 1,
-      "purpose": "Engagement Driver | Traffic Driver | Authority Builder | Momentum Amplifier | Evergreen Anchor",
+      "headline": "The hook / headline for this post",
+      "purpose": "momentum | debate | authority | traffic | viral | breaking",
       "format": "text | black background | image caption | poll | short video script | carousel | etc.",
+      "why_this_wins": "Short, data-based explanation. Reference velocity, shares, timing.",
       "copy": "The full post copy ready to paste. Include line breaks as \\n.",
+      "engagement_question": "The specific question to drive comments",
+      "link_strategy": "inject immediately | wait for momentum | no link needed",
       "pinned_comment": "Pinned comment text, or empty string if none",
-      "monetization_instruction": "Specific monetization action, or empty string if none"
+      "monetization_instruction": "Specific monetization action aligned to Project goal, or empty string if none"
     }
   ]
 }
 
-Return exactly 6 posts. Return ONLY valid JSON. No markdown, no backticks, no commentary outside the JSON.`
+Output as many posts as the data supports. No more, no less.
+Return ONLY valid JSON. No markdown, no backticks, no commentary outside the JSON.`
 
     // Condense posts for the prompt
     const postsForPrompt = posts.slice(0, 30).map((p, i) => {

@@ -198,8 +198,8 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
 
   if (loading) return (
     <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6 mb-5 animate-pulse">
-      <div className="flex items-center gap-3"><span className="text-xl">📋</span><span className="text-base font-semibold text-violet-700">Building your publishing plan from {posts?.length || 0} trending posts…</span></div>
-      <p className="text-sm text-violet-500 mt-2">Writing 6 ready-to-paste posts. 15-30 seconds.</p>
+      <div className="flex items-center gap-3"><span className="text-xl">📋</span><span className="text-base font-semibold text-violet-700">Analyzing {posts?.length || 0} trending posts…</span></div>
+      <p className="text-sm text-violet-500 mt-2">Building your publishing plan. 15-30 seconds.</p>
     </div>
   )
   if (error) return (
@@ -210,20 +210,30 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
   if (!strategy?.posts?.length) return null
 
   const purposeStyle = {
-    'Engagement Driver': { color: 'bg-blue-50 text-blue-600 border-blue-200', icon: '💬' },
-    'Traffic Driver': { color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: '🔗' },
-    'Authority Builder': { color: 'bg-purple-50 text-purple-600 border-purple-200', icon: '🏛️' },
-    'Momentum Amplifier': { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: '🚀' },
-    'Evergreen Anchor': { color: 'bg-teal-50 text-teal-600 border-teal-200', icon: '🌲' },
+    'momentum': { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: '🚀' },
+    'debate': { color: 'bg-blue-50 text-blue-600 border-blue-200', icon: '💬' },
+    'authority': { color: 'bg-purple-50 text-purple-600 border-purple-200', icon: '🏛️' },
+    'traffic': { color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: '🔗' },
+    'viral': { color: 'bg-pink-50 text-pink-600 border-pink-200', icon: '🔥' },
+    'breaking': { color: 'bg-red-50 text-red-600 border-red-200', icon: '⚡' },
   }
+  const linkLabel = { 'inject immediately': '🔗 Link now', 'wait for momentum': '⏳ Link after traction', 'no link needed': '—' }
 
   return (
     <div className="mb-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-xl">📋</span>
-        <h3 className="text-lg font-bold text-slate-900">Daily Publishing Plan</h3>
-        <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{strategy.posts.length} posts</span>
+        <h3 className="text-lg font-bold text-slate-900">Publishing Plan</h3>
+        <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{strategy.posts.length} post{strategy.posts.length !== 1 ? 's' : ''}</span>
       </div>
+
+      {/* Skip list */}
+      {strategy.skip?.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Skip These</p>
+          {strategy.skip.map((s, i) => <p key={i} className="text-sm text-slate-500 mb-1 last:mb-0">🚫 {s}</p>)}
+        </div>
+      )}
 
       {strategy.posts.map((post, i) => {
         const ps = purposeStyle[post.purpose] || { color: 'bg-slate-50 text-slate-600 border-slate-200', icon: '📝' }
@@ -237,6 +247,9 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
                 <span className="text-lg font-bold text-slate-300">#{post.order || i + 1}</span>
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ps.color}`}>{ps.icon} {post.purpose}</span>
                 {post.format && <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{post.format}</span>}
+                {post.link_strategy && linkLabel[post.link_strategy] && linkLabel[post.link_strategy] !== '—' && (
+                  <span className="text-xs text-slate-400">{linkLabel[post.link_strategy]}</span>
+                )}
               </div>
               <button onClick={() => copyText(displayCopy, postId)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copiedId === postId ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-white border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300'}`}>
@@ -248,14 +261,35 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
               </button>
             </div>
 
+            {/* Headline + why */}
+            {(post.headline || post.why_this_wins) && (
+              <div className="px-5 pt-4 pb-0 space-y-1">
+                {post.headline && <p className="text-base font-bold text-slate-900">{post.headline}</p>}
+                {post.why_this_wins && <p className="text-xs text-slate-400 italic">{post.why_this_wins}</p>}
+              </div>
+            )}
+
             {/* Post copy */}
             <div className="px-5 py-4">
               <div className="whitespace-pre-wrap text-[15px] text-slate-800 leading-relaxed">{displayCopy}</div>
             </div>
 
-            {/* Pinned comment & monetization */}
-            {(post.pinned_comment || post.monetization_instruction) && (
+            {/* Engagement question, pinned comment, monetization */}
+            {(post.engagement_question || post.pinned_comment || post.monetization_instruction) && (
               <div className="px-5 pb-4 space-y-2">
+                {post.engagement_question && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
+                    <span className="text-xs mt-0.5">💬</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-amber-500 mb-0.5">Engagement Question</p>
+                      <p className="text-sm text-slate-700">{post.engagement_question}</p>
+                    </div>
+                    <button onClick={() => copyText(post.engagement_question, `eq-${i}`)}
+                      className={`shrink-0 text-xs px-2 py-1 rounded transition-all ${copiedId === `eq-${i}` ? 'text-emerald-500' : 'text-amber-300 hover:text-amber-500'}`}>
+                      {copiedId === `eq-${i}` ? '✓' : 'Copy'}
+                    </button>
+                  </div>
+                )}
                 {post.pinned_comment && (
                   <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
                     <span className="text-xs mt-0.5">📌</span>
