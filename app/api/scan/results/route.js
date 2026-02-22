@@ -3,20 +3,20 @@ import { NextResponse } from 'next/server'
 
 // ─── Platform-specific normalization ───
 function normalizeFacebook(post) {
-  const reactions = post.likesCount || post.likes || post.reactionsCount || 0
-  const comments = post.commentsCount || post.comments || 0
+  const reactions = post.likesCount || post.likes || post.reactionsCount || post.reactions || 0
+  const comments = post.commentsCount || post.comments || post.numberOfComments || 0
   const shares = post.sharesCount || post.shares || 0
   return {
-    post_id: post.postId || post.postUrl || post.url || Math.random().toString(36).slice(2),
-    post_url: post.postUrl || post.url || '',
-    content_preview: (post.postText || post.text || post.message || '').slice(0, 500),
+    post_id: post.postId || post.id || post.postUrl || post.url || Math.random().toString(36).slice(2),
+    post_url: post.postUrl || post.url || post.link || '',
+    content_preview: (post.postText || post.text || post.message || post.body || '').slice(0, 500),
     reactions,
     comments,
     shares,
     total_interactions: reactions + comments + shares,
-    posted_at: post.time || post.postTimestamp || post.timestamp || post.date || null,
-    page_name: post.pageName || post.authorName || post.pageTitle || '',
-    page_url: post.pageUrl || '',
+    posted_at: post.time || post.postTimestamp || post.timestamp || post.date || post.createdAt || post.postedAt || null,
+    page_name: post.pageName || post.authorName || post.pageTitle || post.groupName || post.author?.name || '',
+    page_url: post.pageUrl || post.groupUrl || '',
     platform: 'facebook',
     metrics: { reactions, comments, shares },
     metric_labels: { m1: 'Reactions', m2: 'Comments', m3: 'Shares' },

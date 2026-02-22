@@ -48,6 +48,22 @@ function getActorConfig(platform, pageUrls, resultsLimit) {
       }
     case 'facebook':
     default:
+      // Detect if any URLs are group URLs
+      const groupUrls = pageUrls.filter(url => /facebook\.com\/groups\//i.test(url))
+      const pageOnlyUrls = pageUrls.filter(url => !/facebook\.com\/groups\//i.test(url))
+      
+      // If all URLs are groups, use the dedicated groups scraper
+      if (groupUrls.length > 0 && pageOnlyUrls.length === 0) {
+        return {
+          actorId: 'apify~facebook-groups-scraper',
+          input: {
+            startUrls: groupUrls.map((url) => ({ url })),
+            resultsPerPage: resultsLimit,
+            sortPostsBy: 'new',
+          },
+        }
+      }
+      // If mixed, use the general posts scraper (handles both)
       return {
         actorId: 'apify~facebook-posts-scraper',
         input: {

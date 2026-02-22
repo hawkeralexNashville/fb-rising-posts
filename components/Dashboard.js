@@ -5,7 +5,7 @@ import Admin from './Admin'
 
 // ─── Platform Config ───
 const PLATFORMS = {
-  facebook: { label: 'Facebook', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: '📘', placeholder: 'https://facebook.com/PageName or just PageName', urlPrefix: 'https://www.facebook.com/' },
+  facebook: { label: 'Facebook', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: '📘', placeholder: 'Page URL, Group URL, or just PageName', urlPrefix: 'https://www.facebook.com/' },
   x: { label: 'X / Twitter', color: 'text-slate-800 bg-slate-100 border-slate-300', icon: '𝕏', placeholder: '@username or https://x.com/username', urlPrefix: 'https://x.com/' },
   reddit: { label: 'Reddit', color: 'text-orange-600 bg-orange-50 border-orange-200', icon: '🔴', placeholder: 'r/subreddit or https://reddit.com/r/subreddit', urlPrefix: 'https://www.reddit.com/r/' },
 }
