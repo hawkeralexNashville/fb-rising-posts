@@ -22,17 +22,23 @@ function getResultsLimit(timeWindowHours) {
 function getActorConfig(platform, pageUrls, resultsLimit) {
   switch (platform) {
     case 'x':
+      // Extract handles from URLs where possible
+      const handles = pageUrls.map(url => {
+        const match = url.match(/(?:x\.com|twitter\.com)\/(@?[\w]+)/i)
+        return match ? match[1].replace('@', '') : null
+      }).filter(Boolean)
+      const startUrls = pageUrls.filter(url => url.startsWith('http'))
       return {
-        actorId: 'apify~tweet-scraper',
+        actorId: 'apidojo~tweet-scraper',
         input: {
-          startUrls: pageUrls.map((url) => ({ url })),
-          maxTweets: resultsLimit,
-          addUserInfo: true,
+          ...(startUrls.length > 0 ? { startUrls } : {}),
+          ...(handles.length > 0 ? { twitterHandles: handles } : {}),
+          maxItems: resultsLimit,
         },
       }
     case 'reddit':
       return {
-        actorId: 'apify~reddit-scraper',
+        actorId: 'trudax~reddit-scraper',
         input: {
           startUrls: pageUrls.map((url) => ({ url })),
           maxPostCount: resultsLimit,
