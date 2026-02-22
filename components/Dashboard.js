@@ -191,6 +191,148 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   )
 }
 
+// ─── Batch Strategy Panel ───
+function BatchStrategyPanel({ strategy, loading, error, posts }) {
+  const [expanded, setExpanded] = useState({})
+  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
+  const copyText = (text) => { navigator.clipboard.writeText(text) }
+
+  if (loading) return (
+    <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6 mb-5 animate-pulse">
+      <div className="flex items-center gap-3"><span className="text-xl">🧠</span><span className="text-base font-semibold text-violet-700">Analyzing {posts?.length || 0} trending posts…</span></div>
+      <p className="text-sm text-violet-500 mt-2">Building your content strategy. This takes 10-20 seconds.</p>
+    </div>
+  )
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-5">
+      <p className="text-sm text-red-600">{error}</p>
+    </div>
+  )
+  if (!strategy) return null
+
+  const strengthColor = (s) => s === 'high' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : s === 'moderate' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'
+  const urgencyColor = (u) => u === 'high' ? 'text-red-500' : u === 'moderate' ? 'text-amber-500' : 'text-slate-400'
+
+  return (
+    <div className="bg-white border-2 border-violet-200 rounded-2xl overflow-hidden mb-5">
+      <div className="bg-gradient-to-r from-violet-50 to-purple-50 px-6 py-4 border-b border-violet-100">
+        <div className="flex items-center gap-2 mb-2"><span className="text-xl">🧠</span><h3 className="text-lg font-bold text-violet-800">Content Strategy</h3></div>
+        {strategy.summary && <p className="text-sm text-violet-700 leading-relaxed">{strategy.summary}</p>}
+      </div>
+
+      {/* Themes */}
+      {strategy.themes?.length > 0 && (
+        <div className="px-6 py-4 border-b border-slate-100">
+          <button onClick={() => toggle('themes')} className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Trending Themes ({strategy.themes.length})</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.themes !== false ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+          {expanded.themes !== false && (
+            <div className="mt-3 space-y-2">
+              {strategy.themes.map((theme, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${strengthColor(theme.strength)}`}>{theme.strength}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{theme.theme}</p>
+                    <p className="text-sm text-slate-600 mt-0.5">{theme.opportunity}</p>
+                    {theme.post_indices?.length > 0 && <p className="text-xs text-slate-400 mt-1">Posts: {theme.post_indices.map(idx => `#${idx + 1}`).join(', ')}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Top Opportunities */}
+      {strategy.top_opportunities?.length > 0 && (
+        <div className="px-6 py-4 border-b border-slate-100">
+          <button onClick={() => toggle('opps')} className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Top Opportunities ({strategy.top_opportunities.length})</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.opps !== false ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+          {expanded.opps !== false && (
+            <div className="mt-3 space-y-4">
+              {strategy.top_opportunities.map((opp, i) => (
+                <div key={i} className="border border-violet-100 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-violet-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-violet-600">#{i + 1}</span>
+                      <span className="text-sm font-semibold text-slate-800">{opp.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {opp.format && <span className="text-xs bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full">{opp.format}</span>}
+                      {opp.urgency && <span className={`text-xs font-medium ${urgencyColor(opp.urgency)}`}>{opp.urgency === 'high' ? '🔥 Act now' : opp.urgency === 'moderate' ? '⏰ Soon' : '📋 When ready'}</span>}
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 space-y-3">
+                    {opp.angle && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Angle</p><p className="text-sm text-slate-700">{opp.angle}</p></div>}
+                    {opp.hook && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Hook</p>
+                        <div className="group flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
+                          <p className="text-sm font-medium text-slate-800 flex-1">{opp.hook}</p>
+                          <button onClick={() => copyText(opp.hook)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {opp.engagement_play && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Engagement Play</p>
+                        <div className="group flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
+                          <p className="text-sm text-slate-700 flex-1">{opp.engagement_play}</p>
+                          <button onClick={() => copyText(opp.engagement_play)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {opp.monetization && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Monetization</p><p className="text-sm text-slate-600">{opp.monetization}</p></div>}
+                    {opp.urgency_reason && <p className="text-xs text-slate-400 italic">{opp.urgency_reason}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Skip Topics */}
+      {strategy.skip_topics?.length > 0 && (
+        <div className="px-6 py-4 border-b border-slate-100">
+          <button onClick={() => toggle('skip')} className="flex items-center justify-between w-full">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Skip These Topics</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.skip ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+          {expanded.skip && (
+            <div className="mt-2 space-y-1">
+              {strategy.skip_topics.map((topic, i) => <p key={i} className="text-sm text-slate-500 pl-2 border-l-2 border-slate-200">🚫 {topic}</p>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Calendar */}
+      {strategy.content_calendar && (
+        <div className="px-6 py-4 border-b border-slate-100">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">📅 Content Calendar (Next 24-48h)</p>
+          <p className="text-sm text-slate-700 leading-relaxed">{strategy.content_calendar}</p>
+        </div>
+      )}
+
+      {/* Risk Notes */}
+      {strategy.risk_notes && (
+        <div className="px-6 py-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-500 mb-1">⚠️ Risks & Warnings</p>
+          <p className="text-sm text-slate-600">{strategy.risk_notes}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Strategy Panel ───
 function StrategyPanel({ strategy, loading, error }) {
   const [expanded, setExpanded] = useState(true)
@@ -405,6 +547,7 @@ export default function Dashboard({ supabase, session }) {
   const [projects, setProjects] = useState([])
   const [activeProjectId, setActiveProjectId] = useState(null)
   const [editingProject, setEditingProject] = useState(null)
+  const [batchStrategy, setBatchStrategy] = useState({ loading: false, strategy: null, error: null })
   const [pendingRerun, setPendingRerun] = useState(null)
   // Group Scanner state
   const [groupStreams, setGroupStreams] = useState([])
@@ -431,7 +574,7 @@ export default function Dashboard({ supabase, session }) {
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
   useEffect(() => {
@@ -474,6 +617,23 @@ export default function Dashboard({ supabase, session }) {
   }
   async function deleteProject(id) { if (!confirm('Delete this project?')) return; await supabase.from('projects').delete().eq('id', id); setProjects(projects.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null); showToast('Project deleted.') }
   const activeProject = projects.find(p => p.id === activeProjectId) || null
+
+  async function generateBatchStrategy(posts) {
+    if (!activeProject || !posts?.length) return
+    setBatchStrategy({ loading: true, strategy: null, error: null })
+    try {
+      const res = await fetch('/api/ai/batch-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ posts, project: activeProject }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate strategy')
+      setBatchStrategy({ loading: false, strategy: data.strategy, error: null })
+    } catch (err) {
+      setBatchStrategy({ loading: false, strategy: null, error: err.message })
+    }
+  }
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
@@ -539,7 +699,7 @@ export default function Dashboard({ supabase, session }) {
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]) }
   }
-  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved') } }
+  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setBatchStrategy({ loading: false, strategy: null, error: null }) } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
   async function rerunSavedScan(scan) {
@@ -1061,6 +1221,15 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
               {isQuickScanning && <ScanningAnimation />}
+
+              {activeProject && quickRisingPosts.length > 0 && !batchStrategy.strategy && (
+                <button onClick={() => generateBatchStrategy(quickRisingPosts)} disabled={batchStrategy.loading}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${quickRisingPosts.length} Posts`}
+                </button>
+              )}
+              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={quickRisingPosts} />
+
               <RisingPostsList posts={quickRisingPosts} activeProject={activeProject} session={session} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
@@ -1085,6 +1254,16 @@ export default function Dashboard({ supabase, session }) {
                 className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors mb-6">
                 {Icons.zap} Run This Scan Again
               </button>
+
+              {/* Batch AI Strategy */}
+              {activeProject && selectedSavedScan.results?.length > 0 && !batchStrategy.strategy && (
+                <button onClick={() => generateBatchStrategy(selectedSavedScan.results)} disabled={batchStrategy.loading}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${selectedSavedScan.results.length} Posts`}
+                </button>
+              )}
+              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={selectedSavedScan.results} />
+
               <RisingPostsList posts={selectedSavedScan.results || []} activeProject={activeProject} session={session} />
               {(!selectedSavedScan.results || selectedSavedScan.results.length === 0) && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">This saved scan has no results.</p></div>
@@ -1214,6 +1393,15 @@ export default function Dashboard({ supabase, session }) {
                 </div>
               )}
 
+              {/* Batch AI Strategy */}
+              {activeProject && filteredPosts.length > 0 && !batchStrategy.strategy && (
+                <button onClick={() => generateBatchStrategy(filteredPosts)} disabled={batchStrategy.loading}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${filteredPosts.length} Posts`}
+                </button>
+              )}
+              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={filteredPosts} />
+
               {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} activeProject={activeProject} session={session} />}
               {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
@@ -1291,6 +1479,15 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
+
+              {activeProject && risingPosts.length > 0 && !batchStrategy.strategy && (
+                <button onClick={() => generateBatchStrategy(risingPosts)} disabled={batchStrategy.loading}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${risingPosts.length} Posts`}
+                </button>
+              )}
+              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={risingPosts} />
+
               {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} activeProject={activeProject} session={session} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
