@@ -225,6 +225,7 @@ export default function Dashboard({ supabase, session }) {
   const [publicStreams, setPublicStreams] = useState([])
   const [selectedPublicStream, setSelectedPublicStream] = useState(null)
   const [publicPages, setPublicPages] = useState([])
+  const [showPublicPages, setShowPublicPages] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
   // Group Scanner state
@@ -290,9 +291,24 @@ export default function Dashboard({ supabase, session }) {
     if (!error) { setStreams(streams.map(s => s.id === streamId ? { ...s, is_public: isPublic, creator_name: isPublic ? displayName : null } : s)); loadPublicStreams() }
   }
   async function selectPublicStream(stream) {
-    if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null)
+    if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null); setShowPublicPages(false)
     const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', stream.id).order('created_at', { ascending: true })
     setPublicPages(data || [])
+  }
+  async function clonePublicStream() {
+    if (!selectedPublicStream) return
+    const { data: newStream, error } = await supabase.from('streams').insert({ user_id: userId, name: selectedPublicStream.name, type: 'rising' }).select().single()
+    if (error || !newStream) { showToast('Failed to clone stream.', 'error'); return }
+    // Clone all pages
+    const pagesToInsert = publicPages.map(p => ({ user_id: userId, stream_id: newStream.id, url: p.url, display_name: p.display_name, platform: p.platform || 'facebook' }))
+    for (let i = 0; i < pagesToInsert.length; i += 50) {
+      await supabase.from('monitored_pages').insert(pagesToInsert.slice(i, i + 50))
+    }
+    setStreams([...streams, newStream])
+    setSelectedStreamId(newStream.id)
+    setView('streams')
+    setSelectedPublicStream(null)
+    showToast(`Cloned "${newStream.name}" with ${publicPages.length} pages!`)
   }
   async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
 
@@ -887,31 +903,59 @@ export default function Dashboard({ supabase, session }) {
         {view === 'public' && selectedPublicStream && (
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-emerald-500">{Icons.globe}</span>
-                <h2 className="text-xl font-bold text-slate-900">{selectedPublicStream.name}</h2>
-                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-medium text-emerald-600">Public</span>
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-500">{Icons.globe}</span>
+                  <h2 className="text-xl font-bold text-slate-900">{selectedPublicStream.name}</h2>
+                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-medium text-emerald-600">Public</span>
+                </div>
+                <button onClick={clonePublicStream}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 transition-all">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                  Clone to My Streams
+                </button>
               </div>
-              <p className="text-sm text-slate-400 mb-5">Public stream</p>
 
-              {publicPages.length > 0 && (
-                <div className="mb-5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 block">Monitored Pages ({publicPages.length})</span>
-                  <div className="flex flex-wrap gap-2 mb-4">
+              {/* Compact pages bar — same as owned streams */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400">{Icons.stream}</span>
+                    <span className="text-sm font-medium text-slate-700">{publicPages.length} page{publicPages.length !== 1 ? 's' : ''} monitored</span>
+                    {publicPages.length > 0 && (
+                      <div className="flex items-center gap-1 ml-1">
+                        {[...new Set(publicPages.map(p => p.platform || 'facebook'))].map(plat => (
+                          <span key={plat} className="text-sm" title={PLATFORMS[plat]?.label}>{PLATFORMS[plat]?.icon}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {publicPages.length > 0 && (
+                    <button onClick={() => setShowPublicPages(!showPublicPages)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showPublicPages ? 'bg-slate-100 text-slate-700 border border-slate-300' : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                      View Pages
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${showPublicPages ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  )}
+                </div>
+
+                {showPublicPages && publicPages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-1">
                     {publicPages.map((page) => {
                       const p = PLATFORMS[page.platform] || PLATFORMS.facebook
                       return (
-                        <div key={page.id} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm">
-                          <span className="text-sm" title={p.label}>{p.icon}</span>
-                          <span className="text-slate-700">{page.display_name}</span>
+                        <div key={page.id} className="flex items-center gap-2.5 py-2 px-3 rounded-lg hover:bg-slate-50 transition-colors">
+                          <span className="text-sm shrink-0" title={p.label}>{p.icon}</span>
+                          <span className="text-sm text-slate-700 truncate">{page.display_name}</span>
+                          <span className="text-xs text-slate-300 truncate hidden sm:inline">{page.url}</span>
                         </div>
                       )
                     })}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              <div className="pt-4 border-t border-slate-200 mb-5">
+              <div className="mb-5">
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} />
               </div>
 
