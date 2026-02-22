@@ -2,25 +2,29 @@
 import { useState, useEffect } from 'react'
 import Account from './Account'
 
+// ─── Platform Config ───
+const PLATFORMS = {
+  facebook: { label: 'Facebook', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: '📘', placeholder: 'https://facebook.com/PageName or just PageName', urlPrefix: 'https://www.facebook.com/' },
+  x: { label: 'X / Twitter', color: 'text-slate-800 bg-slate-100 border-slate-300', icon: '𝕏', placeholder: '@username or https://x.com/username', urlPrefix: 'https://x.com/' },
+  reddit: { label: 'Reddit', color: 'text-orange-600 bg-orange-50 border-orange-200', icon: '🔴', placeholder: 'r/subreddit or https://reddit.com/r/subreddit', urlPrefix: 'https://www.reddit.com/r/' },
+}
+
 // ─── Icons ───
 const Icons = {
   plus: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
   trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>,
   scan: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
   trending: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>,
-  settings: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>,
-  logout: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>,
   stream: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>,
   link: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>,
   zap: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>,
   clock: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
   filter: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>,
-  save: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>,
   folder: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>,
   user: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+  dollar: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>,
 }
 
-// ─── Scanning Messages ───
 const SCANNING_MESSAGES = [
   '🔍 Scanning the internet for your next viral jackpot…',
   '🧠 Teaching the algorithm what "blow up" really means…',
@@ -37,36 +41,15 @@ const SCANNING_MESSAGES = [
 function ScanningAnimation() {
   const [index, setIndex] = useState(0)
   const [fade, setFade] = useState(true)
-
+  useEffect(() => { setIndex(Math.floor(Math.random() * SCANNING_MESSAGES.length)) }, [])
   useEffect(() => {
-    // Shuffle the starting index
-    setIndex(Math.floor(Math.random() * SCANNING_MESSAGES.length))
-  }, [])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFade(false)
-      setTimeout(() => {
-        setIndex((prev) => (prev + 1) % SCANNING_MESSAGES.length)
-        setFade(true)
-      }, 300)
-    }, 3000)
+    const interval = setInterval(() => { setFade(false); setTimeout(() => { setIndex((prev) => (prev + 1) % SCANNING_MESSAGES.length); setFade(true) }, 300) }, 3000)
     return () => clearInterval(interval)
   }, [])
-
   return (
     <div className="my-8 flex flex-col items-center gap-5">
-      {/* Animated progress bar */}
-      <div className="w-full max-w-sm h-1.5 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-orange-400 via-rose-400 to-orange-400 rounded-full animate-scanning-bar" />
-      </div>
-      {/* Rotating message */}
-      <p
-        className="text-base font-medium text-slate-500 text-center transition-all duration-300 min-h-[28px]"
-        style={{ opacity: fade ? 1 : 0, transform: fade ? 'translateY(0)' : 'translateY(8px)' }}
-      >
-        {SCANNING_MESSAGES[index]}
-      </p>
+      <div className="w-full max-w-sm h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-orange-400 via-rose-400 to-orange-400 rounded-full animate-scanning-bar" /></div>
+      <p className="text-base font-medium text-slate-500 text-center transition-all duration-300 min-h-[28px]" style={{ opacity: fade ? 1 : 0, transform: fade ? 'translateY(0)' : 'translateY(8px)' }}>{SCANNING_MESSAGES[index]}</p>
     </div>
   )
 }
@@ -90,45 +73,34 @@ const MAX_INTERACTION_OPTIONS = [
   { value: 50000, label: '50,000' },
 ]
 
-// ─── Helpers ───
-function timeAgo(dateStr) {
-  if (!dateStr) return ''
-  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-function formatNumber(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
-  return n?.toString() || '0'
-}
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
-
+function timeAgo(dateStr) { if (!dateStr) return ''; const diff = (Date.now() - new Date(dateStr).getTime()) / 1000; if (diff < 60) return 'just now'; if (diff < 3600) return `${Math.floor(diff / 60)}m ago`; if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`; return `${Math.floor(diff / 86400)}d ago` }
+function formatNumber(n) { if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'; if (n >= 1000) return (n / 1000).toFixed(1) + 'K'; return n?.toString() || '0' }
+function formatDate(dateStr) { const d = new Date(dateStr); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }
 const selectStyle = { backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }
+
+// ─── Platform Tabs ───
+function PlatformTabs({ selected, onChange }) {
+  return (
+    <div className="flex gap-2 mb-5">
+      {Object.entries(PLATFORMS).map(([key, p]) => (
+        <button key={key} onClick={() => onChange(key)}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all ${selected === key ? p.color + ' shadow-sm' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'}`}>
+          <span className="text-base">{p.icon}</span> {p.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 // ─── Scan Controls ───
 function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled }) {
-  const btnClass = isScanning
-    ? 'bg-orange-100 text-orange-500 border border-orange-200 cursor-not-allowed animate-pulse-glow'
-    : disabled
-    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-    : 'bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white shadow-sm shadow-orange-500/20 hover:shadow-md'
-
+  const btnClass = isScanning ? 'bg-orange-100 text-orange-500 border border-orange-200 cursor-not-allowed animate-pulse-glow' : disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white shadow-sm shadow-orange-500/20 hover:shadow-md'
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.clock} Time Window</label>
-          <select value={timeWindow} onChange={(e) => setTimeWindow(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>
-            {TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
+          <select value={timeWindow} onChange={(e) => setTimeWindow(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.filter} Min Interactions</label>
@@ -136,14 +108,9 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.filter} Max Interactions</label>
-          <select value={maxInteractions} onChange={(e) => setMaxInteractions(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>
-            {MAX_INTERACTION_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
+          <select value={maxInteractions} onChange={(e) => setMaxInteractions(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{MAX_INTERACTION_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
         </div>
-        <button onClick={onScan} disabled={isScanning || disabled} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${btnClass}`}>
-          {Icons.scan}
-          {isScanning ? 'Scanning...' : 'Scan Now'}
-        </button>
+        <button onClick={onScan} disabled={isScanning || disabled} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${btnClass}`}>{Icons.scan}{isScanning ? 'Scanning...' : 'Scan Now'}</button>
       </div>
       <p className="text-xs text-slate-400">Shorter time windows pull fewer posts per page, reducing Apify costs.</p>
     </div>
@@ -155,41 +122,57 @@ function RisingPostsList({ posts }) {
   if (!posts || posts.length === 0) return null
   return (
     <div className="space-y-3">
-      {posts.map((post, i) => (
-        <div key={post.post_id || i} className="bg-white border border-slate-200 rounded-2xl p-5 animate-slide-up hover:border-slate-300 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="min-w-0">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{post.page_name || 'Unknown Page'}</span>
-              {post.posted_at && <span className="text-xs text-slate-400 ml-2">{timeAgo(post.posted_at)}</span>}
-              {post.age_hours && <span className="text-xs text-slate-300 ml-2">({post.age_hours}h old)</span>}
+      {posts.map((post, i) => {
+        const p = PLATFORMS[post.platform] || PLATFORMS.facebook
+        const labels = post.metric_labels || { m1: 'Reactions', m2: 'Comments', m3: 'Shares' }
+        const metrics = post.metrics || { reactions: post.reactions, comments: post.comments, shares: post.shares }
+        const m1Val = Object.values(metrics)[0] || 0
+        const m2Val = Object.values(metrics)[1] || 0
+        const m3Val = Object.values(metrics)[2] || 0
+        return (
+          <div key={post.post_id || i} className="bg-white border border-slate-200 rounded-2xl p-5 animate-slide-up hover:border-slate-300 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-base shrink-0" title={p.label}>{p.icon}</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{post.page_name || 'Unknown'}</span>
+                {post.posted_at && <span className="text-xs text-slate-400">{timeAgo(post.posted_at)}</span>}
+                {post.age_hours && <span className="text-xs text-slate-300">({post.age_hours}h old)</span>}
+              </div>
+              {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-orange-500 transition-colors">{Icons.link}</a>}
             </div>
-            {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-orange-500 transition-colors">{Icons.link}</a>}
-          </div>
-          {post.content_preview && <p className="text-base text-slate-700 mb-4 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
-          <div className="flex items-center gap-5 text-sm">
-            <div className="flex items-center gap-1.5"><span className="text-slate-400">Total</span><span className="font-semibold text-slate-800">{formatNumber(post.total_interactions)}</span></div>
-            <div className="flex items-center gap-1.5"><span className="text-slate-400">Velocity</span><span className="font-semibold text-orange-500">{post.velocity?.toFixed(0) || '—'}/hr</span></div>
-            {post.delta !== null && post.delta !== undefined && <div className="flex items-center gap-1.5"><span className="text-slate-400">Delta</span><span className="font-semibold text-orange-500">+{post.delta}</span></div>}
-            <div className="flex items-center gap-3 ml-auto text-slate-400">
-              <span>👍 {formatNumber(post.reactions)}</span>
-              <span>💬 {formatNumber(post.comments)}</span>
-              <span>🔄 {formatNumber(post.shares)}</span>
+            {post.content_preview && <p className="text-base text-slate-700 mb-4 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
+            <div className="flex items-center gap-5 text-sm">
+              <div className="flex items-center gap-1.5"><span className="text-slate-400">Total</span><span className="font-semibold text-slate-800">{formatNumber(post.total_interactions)}</span></div>
+              <div className="flex items-center gap-1.5"><span className="text-slate-400">Velocity</span><span className="font-semibold text-orange-500">{post.velocity?.toFixed(0) || '—'}/hr</span></div>
+              {post.delta !== null && post.delta !== undefined && <div className="flex items-center gap-1.5"><span className="text-slate-400">Delta</span><span className="font-semibold text-orange-500">+{post.delta}</span></div>}
+              <div className="flex items-center gap-3 ml-auto text-slate-400 text-xs">
+                <span>{labels.m1} {formatNumber(m1Val)}</span>
+                <span>{labels.m2} {formatNumber(m2Val)}</span>
+                <span>{labels.m3} {formatNumber(m3Val)}</span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
 
-// ─── Scan Summary + Save ───
-function ScanSummary({ status, message, postCount, totalScraped, filteredOut }) {
+// ─── Scan Summary ───
+function ScanSummary({ status, message, postCount, totalScraped, filteredOut, costUsd }) {
   if (!message) return null
   return (
     <div className="mb-5">
       <p className={`text-sm ${status === 'error' ? 'text-red-500' : status === 'done' ? 'text-slate-500' : 'text-orange-500'}`}>{message}</p>
       {status === 'done' && totalScraped > 0 && (
-        <p className="text-xs text-slate-400 mt-1">{totalScraped} scraped → {filteredOut} filtered → {postCount} rising</p>
+        <div className="flex items-center gap-3 mt-1">
+          <p className="text-xs text-slate-400">{totalScraped} scraped → {filteredOut} filtered → {postCount} rising</p>
+          {costUsd !== null && costUsd !== undefined && (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5">
+              {Icons.dollar} ${costUsd.toFixed(4)}
+            </span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -204,6 +187,7 @@ export default function Dashboard({ supabase, session }) {
   const [newStreamName, setNewStreamName] = useState('')
   const [newPageUrl, setNewPageUrl] = useState('')
   const [newPageName, setNewPageName] = useState('')
+  const [newPagePlatform, setNewPagePlatform] = useState('facebook')
   const [showAddStream, setShowAddStream] = useState(false)
   const [timeWindow, setTimeWindow] = useState(6)
   const [minInteractions, setMinInteractions] = useState(50)
@@ -211,16 +195,16 @@ export default function Dashboard({ supabase, session }) {
   const [scanStatus, setScanStatus] = useState('idle')
   const [scanMessage, setScanMessage] = useState('')
   const [risingPosts, setRisingPosts] = useState([])
-  const [scanStats, setScanStats] = useState({ totalScraped: 0, filteredOut: 0 })
+  const [scanStats, setScanStats] = useState({ totalScraped: 0, filteredOut: 0, costUsd: null })
   const [quickUrl, setQuickUrl] = useState('')
+  const [quickPlatform, setQuickPlatform] = useState('facebook')
   const [quickScanStatus, setQuickScanStatus] = useState('idle')
   const [quickScanMessage, setQuickScanMessage] = useState('')
   const [quickRisingPosts, setQuickRisingPosts] = useState([])
-  const [quickScanStats, setQuickScanStats] = useState({ totalScraped: 0, filteredOut: 0 })
+  const [quickScanStats, setQuickScanStats] = useState({ totalScraped: 0, filteredOut: 0, costUsd: null })
   const [savedScans, setSavedScans] = useState([])
   const [selectedSavedScan, setSelectedSavedScan] = useState(null)
   const [settings, setSettings] = useState({ min_velocity: 50, min_delta: 20 })
-
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans() }, [userId])
@@ -228,35 +212,21 @@ export default function Dashboard({ supabase, session }) {
 
   async function loadStreams() { const { data } = await supabase.from('streams').select('*').order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
-  async function loadSettings() {
-    const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single()
-    if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours) }
-  }
+  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
+  async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
 
-  async function createStream(e) {
-    e.preventDefault(); if (!newStreamName.trim()) return
-    const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single()
-    if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) }
-  }
-  async function deleteStream(id) {
-    if (!confirm('Delete this stream and all its pages?')) return
-    await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id))
-    if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) }
-  }
+  async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
+  async function deleteStream(id) { if (!confirm('Delete this stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id)); if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) } }
   async function addPage(e) {
     e.preventDefault(); if (!newPageUrl.trim()) return
-    let url = newPageUrl.trim(); if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url
-    const { data, error } = await supabase.from('monitored_pages').insert({ user_id: userId, stream_id: selectedStreamId, url, display_name: newPageName.trim() || url.split('facebook.com/')[1] || url }).select().single()
+    let url = newPageUrl.trim()
+    const plat = newPagePlatform
+    if (!url.startsWith('http')) url = PLATFORMS[plat].urlPrefix + url.replace(/^[@r\/]+/, '')
+    const { data, error } = await supabase.from('monitored_pages').insert({ user_id: userId, stream_id: selectedStreamId, url, display_name: newPageName.trim() || url.split('.com/')[1]?.replace(/^r\//, '') || url, platform: plat }).select().single()
     if (!error && data) { setPages([...pages, data]); setNewPageUrl(''); setNewPageName('') }
   }
   async function deletePage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setPages(pages.filter((p) => p.id !== id)) }
-  async function saveSettings() {
-    const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }
-    const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single()
-    if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) }
-    else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) }
-  }
 
   async function saveScanResults(posts, stats, streamId, source) {
     if (!posts || posts.length === 0) return
@@ -270,27 +240,75 @@ export default function Dashboard({ supabase, session }) {
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { setSelectedSavedScan(data); setView('saved') } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
-  async function runScan(pageUrls, streamId, setStatus, setMessage, setResults, setStats, source) {
-    const token = session?.access_token; setStatus('starting'); setMessage('Starting Apify scraper...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0 })
+  // ─── Scan logic ───
+  async function runScan(pageUrls, streamId, platform, setStatus, setMessage, setResults, setStats, source) {
+    const token = session?.access_token; setStatus('starting'); setMessage('Starting scan...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
     try {
-      const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow }) })
+      const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow, platform }) })
       if (!startRes.ok) { let errBody; try { errBody = await startRes.json() } catch { errBody = {} }; throw new Error(errBody?.userMessage || errBody?.error || 'Failed to start scan') }
-      const { runId } = await startRes.json(); setStatus('scanning'); setMessage('Scanning Facebook pages... This takes 1-3 minutes.')
+      const { runId } = await startRes.json(); setStatus('scanning'); setMessage('Scanning...')
+
       let status = 'RUNNING'
-      while (status === 'RUNNING' || status === 'READY') { await new Promise((r) => setTimeout(r, 5000)); const statusRes = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } }); const statusData = await statusRes.json(); status = statusData.status; if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Scan ${status.toLowerCase()}. Try again.`) }
-      setStatus('processing'); setMessage('Analyzing posts for rising trends...')
+      let costUsd = null
+      while (status === 'RUNNING' || status === 'READY') {
+        await new Promise((r) => setTimeout(r, 5000))
+        const statusRes = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } })
+        const statusData = await statusRes.json()
+        status = statusData.status
+        if (statusData.costUsd) costUsd = statusData.costUsd
+        if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Scan ${status.toLowerCase()}. Try again.`)
+      }
+
+      setStatus('processing'); setMessage('Analyzing posts...')
       const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
-      const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${streamId || ''}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
+      const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${streamId || ''}&platform=${platform}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!resultsRes.ok) { const err = await resultsRes.json(); throw new Error(err.error || 'Failed to process results') }
-      const { posts, totalScraped, filteredOut } = await resultsRes.json(); setResults(posts); setStats({ totalScraped, filteredOut }); setStatus('done')
+
+      const { posts, totalScraped, filteredOut, costUsd: finalCost } = await resultsRes.json()
+      const cost = finalCost ?? costUsd
+      setResults(posts); setStats({ totalScraped, filteredOut, costUsd: cost }); setStatus('done')
       setMessage(posts.length > 0 ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
-      // Auto-save
       if (posts.length > 0) saveScanResults(posts, { totalScraped, filteredOut }, streamId, source)
     } catch (err) { setStatus('error'); setMessage(err.message) }
   }
 
-  async function startQuickScan(e) { e?.preventDefault(); if (!quickUrl.trim()) return; let url = quickUrl.trim(); if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url; await runScan([url], null, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats, url) }
-  async function startStreamScan() { if (pages.length === 0) { setScanMessage('Add some Facebook pages first.'); setScanStatus('error'); return }; await runScan(pages.map((p) => p.url), selectedStreamId, setScanStatus, setScanMessage, setRisingPosts, setScanStats, null) }
+  async function startQuickScan(e) { e?.preventDefault(); if (!quickUrl.trim()) return; let url = quickUrl.trim(); if (!url.startsWith('http')) url = PLATFORMS[quickPlatform].urlPrefix + url.replace(/^[@r\/]+/, ''); await runScan([url], null, quickPlatform, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats, url) }
+
+  async function startStreamScan() {
+    if (pages.length === 0) { setScanMessage('Add some pages first.'); setScanStatus('error'); return }
+    // Group pages by platform and run scans
+    const platforms = [...new Set(pages.map(p => p.platform || 'facebook'))]
+    if (platforms.length === 1) {
+      await runScan(pages.map(p => p.url), selectedStreamId, platforms[0], setScanStatus, setScanMessage, setRisingPosts, setScanStats, null)
+    } else {
+      // Multi-platform stream: scan each platform separately and merge
+      setScanStatus('starting'); setScanMessage('Starting multi-platform scan...'); setRisingPosts([]); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
+      let allPosts = []; let totalScraped = 0; let totalFiltered = 0; let totalCost = 0
+      try {
+        for (const plat of platforms) {
+          const platPages = pages.filter(p => (p.platform || 'facebook') === plat)
+          setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
+          const token = session?.access_token
+          const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: platPages.map(p => p.url), streamId: selectedStreamId, timeWindowHours: timeWindow, platform: plat }) })
+          if (!startRes.ok) { const err = await startRes.json(); throw new Error(err?.userMessage || err?.error || `Failed to start ${plat} scan`) }
+          const { runId } = await startRes.json()
+          setScanStatus('scanning')
+          let status = 'RUNNING'
+          while (status === 'RUNNING' || status === 'READY') { await new Promise(r => setTimeout(r, 5000)); const s = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } }); const sd = await s.json(); status = sd.status; if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`${plat} scan ${status.toLowerCase()}.`) }
+          setScanStatus('processing')
+          const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
+          const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${selectedStreamId}&platform=${plat}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
+          if (!resultsRes.ok) continue
+          const { posts, totalScraped: ts, filteredOut: fo, costUsd } = await resultsRes.json()
+          allPosts = [...allPosts, ...posts]; totalScraped += ts; totalFiltered += fo; totalCost += (costUsd || 0)
+        }
+        allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
+        setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
+        setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} across ${platforms.length} platforms.` : `No posts meet your current filters.`)
+        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered }, selectedStreamId, null)
+      } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
+    }
+  }
 
   const selectedStream = streams.find((s) => s.id === selectedStreamId)
   const isScanning = ['starting', 'scanning', 'processing'].includes(scanStatus)
@@ -319,7 +337,6 @@ export default function Dashboard({ supabase, session }) {
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Streams</span>
             <button onClick={() => setShowAddStream(!showAddStream)} className="text-slate-400 hover:text-orange-500 transition-colors">{Icons.plus}</button>
           </div>
-
           {showAddStream && (
             <form onSubmit={createStream} className="mb-3">
               <input type="text" value={newStreamName} onChange={(e) => setNewStreamName(e.target.value)} placeholder="Stream name..." autoFocus className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 mb-2" />
@@ -329,36 +346,21 @@ export default function Dashboard({ supabase, session }) {
               </div>
             </form>
           )}
-
           {streams.length === 0 && !showAddStream && <p className="text-sm text-slate-400 mt-2">No streams yet.</p>}
           {streams.map((stream) => (
-            <div key={stream.id}
-              className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'streams' && selectedStreamId === stream.id ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'streams' && selectedStreamId === stream.id ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
               onClick={() => { setView('streams'); setSelectedStreamId(stream.id); setSelectedSavedScan(null) }}>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="shrink-0">{Icons.stream}</span>
-                <span className="text-sm font-medium truncate">{stream.name}</span>
-              </div>
+              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.stream}</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
               <button onClick={(e) => { e.stopPropagation(); deleteStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
             </div>
           ))}
-
           {savedScans.length > 0 && (
             <>
-              <div className="flex items-center justify-between mb-2 mt-6">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saved Scans</span>
-              </div>
+              <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saved Scans</span></div>
               {savedScans.map((scan) => (
-                <div key={scan.id}
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'saved' && selectedSavedScan?.id === scan.id ? 'bg-violet-50 text-violet-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                <div key={scan.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'saved' && selectedSavedScan?.id === scan.id ? 'bg-violet-50 text-violet-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
                   onClick={() => loadSavedScan(scan.id)}>
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="shrink-0">{Icons.folder}</span>
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium block truncate">{scan.name}</span>
-                      <span className="text-xs text-slate-400">{scan.rising_count} rising · {timeAgo(scan.created_at)}</span>
-                    </div>
-                  </div>
+                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.folder}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{scan.name}</span><span className="text-xs text-slate-400">{scan.rising_count} rising · {timeAgo(scan.created_at)}</span></div></div>
                   <button onClick={(e) => { e.stopPropagation(); deleteSavedScan(scan.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all shrink-0 ml-1">{Icons.trash}</button>
                 </div>
               ))}
@@ -376,41 +378,26 @@ export default function Dashboard({ supabase, session }) {
 
       {/* ─── Main ─── */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* ─── Account View ─── */}
-        {view === 'account' && (
-          <Account
-            supabase={supabase}
-            session={session}
-            settings={settings}
-            setSettings={setSettings}
-            saveSettings={saveSettings}
-            timeWindow={timeWindow}
-            setTimeWindow={setTimeWindow}
-            minInteractions={minInteractions}
-            setMinInteractions={setMinInteractions}
-            maxInteractions={maxInteractions}
-            setMaxInteractions={setMaxInteractions}
-            streams={streams}
-            savedScans={savedScans}
-          />
-        )}
+        {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
 
         {/* ─── Quick Scan ─── */}
         {view === 'quick' && (
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
               <div className="flex items-center gap-2 mb-1"><span className="text-orange-500">{Icons.zap}</span><h2 className="text-xl font-bold text-slate-900">Quick Scan</h2></div>
-              <p className="text-base text-slate-500 mb-6">Paste a Facebook page URL and scan it instantly.</p>
+              <p className="text-base text-slate-500 mb-5">Paste a URL and scan it instantly.</p>
+
+              <PlatformTabs selected={quickPlatform} onChange={setQuickPlatform} />
 
               <form onSubmit={startQuickScan} className="mb-5">
                 <div className="mb-5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Facebook Page URL</label>
-                  <input type="text" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} placeholder="https://facebook.com/PageName or just PageName" className="w-full max-w-lg px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all" />
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{PLATFORMS[quickPlatform].label} URL</label>
+                  <input type="text" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} placeholder={PLATFORMS[quickPlatform].placeholder} className="w-full max-w-lg px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all" />
                 </div>
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} />
               </form>
 
-              <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} />
+              <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
               {isQuickScanning && <ScanningAnimation />}
               <RisingPostsList posts={quickRisingPosts} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
@@ -460,17 +447,27 @@ export default function Dashboard({ supabase, session }) {
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 block">Monitored Pages ({pages.length})</span>
                 {pages.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {pages.map((page) => (
-                      <div key={page.id} className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm">
-                        <span className="text-slate-700">{page.display_name}</span>
-                        <button onClick={() => deletePage(page.id)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">×</button>
-                      </div>
-                    ))}
+                    {pages.map((page) => {
+                      const p = PLATFORMS[page.platform] || PLATFORMS.facebook
+                      return (
+                        <div key={page.id} className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm">
+                          <span className="text-sm" title={p.label}>{p.icon}</span>
+                          <span className="text-slate-700">{page.display_name}</span>
+                          <button onClick={() => deletePage(page.id)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">×</button>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
-                <form onSubmit={addPage} className="flex gap-2 items-end mb-6">
-                  <div className="flex-1 max-w-sm"><input type="text" value={newPageUrl} onChange={(e) => setNewPageUrl(e.target.value)} placeholder="Facebook page URL or name..." className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
-                  <div className="max-w-[180px]"><input type="text" value={newPageName} onChange={(e) => setNewPageName(e.target.value)} placeholder="Label (optional)" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
+                <form onSubmit={addPage} className="flex flex-wrap gap-2 items-end mb-6">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Platform</label>
+                    <select value={newPagePlatform} onChange={(e) => setNewPagePlatform(e.target.value)} className="px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer pr-10" style={selectStyle}>
+                      {Object.entries(PLATFORMS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1 max-w-sm"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">URL</label><input type="text" value={newPageUrl} onChange={(e) => setNewPageUrl(e.target.value)} placeholder={PLATFORMS[newPagePlatform].placeholder} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
+                  <div className="max-w-[180px]"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Label</label><input type="text" value={newPageName} onChange={(e) => setNewPageName(e.target.value)} placeholder="Optional" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
                   <button type="submit" className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 transition-colors">Add Page</button>
                 </form>
               </div>
@@ -479,7 +476,7 @@ export default function Dashboard({ supabase, session }) {
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} />
               </div>
 
-              <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} />
+              <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
               {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
