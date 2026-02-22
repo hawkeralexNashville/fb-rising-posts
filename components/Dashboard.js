@@ -429,10 +429,15 @@ export default function Dashboard({ supabase, session }) {
           )}
         </div>
 
-        <div className="shrink-0 p-3 border-t border-slate-100">
+        <div className="shrink-0 p-3 border-t border-slate-100 flex flex-col gap-1">
           <button onClick={() => { setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null) }}
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'account' ? 'bg-slate-100 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
             {Icons.user}<span>Account</span>
+          </button>
+          <button onClick={() => supabase.auth.signOut()}
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+            <span>Log Out</span>
           </button>
         </div>
       </div>

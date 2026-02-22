@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import Homepage from '../components/Homepage'
 import Auth from '../components/Auth'
 import Dashboard from '../components/Dashboard'
+import ResetPassword from '../components/ResetPassword'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -15,6 +16,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [showAuth, setShowAuth] = useState(false)
   const [authMode, setAuthMode] = useState('login')
+  const [showResetPassword, setShowResetPassword] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,9 +25,13 @@ export default function Home() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session)
-        if (session) setShowAuth(false)
+        if (event === 'PASSWORD_RECOVERY') {
+          setShowResetPassword(true)
+        } else if (session) {
+          setShowAuth(false)
+        }
       }
     )
 
@@ -38,6 +44,10 @@ export default function Home() {
         <div className="w-7 h-7 border-2 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
       </div>
     )
+  }
+
+  if (showResetPassword && session) {
+    return <ResetPassword supabase={supabase} onDone={() => setShowResetPassword(false)} />
   }
 
   if (session) {
