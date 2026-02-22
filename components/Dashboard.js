@@ -1029,6 +1029,10 @@ export default function Dashboard({ supabase, session }) {
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${view === 'quick' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>
             {Icons.zap}<span>Quick Scan</span>
           </button>
+          <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('recent'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+            className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'recent' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>
+            {Icons.clock}<span>Recent Scans</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -1230,6 +1234,58 @@ export default function Dashboard({ supabase, session }) {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               {activeProject && <span className="text-xs text-violet-500 font-medium">{activeProject.niche}</span>}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Recent Scans Grid ─── */}
+        {view === 'recent' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-slate-400">{Icons.clock}</span>
+                <h2 className="text-xl font-bold text-slate-900">Recent Scans</h2>
+                <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{savedScans.length}</span>
+              </div>
+              {savedScans.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300">{Icons.folder}</div>
+                  <p className="text-base text-slate-400">No scans yet. Run a Quick Scan or Stream scan to get started.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {savedScans.map((scan) => {
+                    const streamName = streams.find(s => s.id === scan.stream_id)?.name
+                    return (
+                      <button key={scan.id} onClick={() => loadSavedScan(scan.id)}
+                        className="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-orange-300 hover:shadow-md hover:shadow-orange-500/5 transition-all group">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {scan.scan_type === 'groups' ? <span className="text-sm">👥</span> : <span className="text-slate-400">{Icons.folder}</span>}
+                            {streamName && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5 truncate max-w-[120px]">{streamName}</span>}
+                          </div>
+                          <span className="text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity">{Icons.link}</span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-slate-800 mb-2 line-clamp-2 leading-snug">{scan.name}</h3>
+                        <div className="flex items-center gap-3 text-xs text-slate-400">
+                          <span>{timeAgo(scan.created_at)}</span>
+                          <span>·</span>
+                          <span className="font-medium text-orange-500">{scan.rising_count} rising</span>
+                          {scan.total_scraped > 0 && <span className="text-slate-300">/ {scan.total_scraped} scraped</span>}
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
+                            {TIME_OPTIONS.find(t => t.value === scan.time_window)?.label || `${scan.time_window}h`}
+                          </span>
+                          <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
+                            Min {scan.min_interactions}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
