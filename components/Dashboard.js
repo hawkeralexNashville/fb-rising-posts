@@ -220,10 +220,18 @@ export default function Dashboard({ supabase, session }) {
   const [selectedPublicStream, setSelectedPublicStream] = useState(null)
   const [publicPages, setPublicPages] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [pendingRerun, setPendingRerun] = useState(null)
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false) }, [selectedStreamId])
+
+  useEffect(() => {
+    if (pendingRerun && pages.length > 0 && view === 'streams') {
+      setPendingRerun(null)
+      startStreamScan()
+    }
+  }, [pendingRerun, pages, view])
 
   async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
@@ -265,6 +273,51 @@ export default function Dashboard({ supabase, session }) {
   }
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { setSelectedSavedScan(data); setView('saved') } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
+
+  async function rerunSavedScan(scan) {
+    // Apply the saved scan's filter settings
+    setTimeWindow(scan.time_window || 24)
+    setMinInteractions(scan.min_interactions || 0)
+    setMaxInteractions(scan.max_interactions || 0)
+
+    // If it has a stream_id, switch to that stream and scan
+    if (scan.stream_id) {
+      const stream = streams.find(s => s.id === scan.stream_id)
+      if (stream) {
+        setView('streams')
+        setSelectedStreamId(scan.stream_id)
+        setSelectedSavedScan(null)
+        setPendingRerun(scan.stream_id)
+        return
+      }
+    }
+
+    // Otherwise, extract unique page URLs from results
+    const results = scan.results || []
+    const urls = [...new Set(results.map(r => r.page_url).filter(Boolean))]
+    if (urls.length === 0 && results.length > 0) {
+      // Try to extract from post URLs
+      const postUrls = [...new Set(results.map(r => r.post_url).filter(Boolean))]
+      if (postUrls.length > 0) urls.push(postUrls[0])
+    }
+
+    if (urls.length === 0) {
+      alert('Cannot determine the original scan URLs from this saved scan.')
+      return
+    }
+
+    // Determine platform from results
+    const platform = results[0]?.platform || 'facebook'
+
+    // Switch to quick scan and run
+    setView('quick')
+    setSelectedSavedScan(null)
+    setQuickPlatform(platform)
+    setQuickUrl(urls[0])
+
+    // Run the scan
+    await runScan(urls, null, platform, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats, scan.name)
+  }
 
   // ─── Scan logic ───
   async function runScan(pageUrls, streamId, platform, setStatus, setMessage, setResults, setStats, source) {
@@ -497,13 +550,17 @@ export default function Dashboard({ supabase, session }) {
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
               <div className="flex items-center gap-2 mb-1"><span className="text-violet-500">{Icons.folder}</span><h2 className="text-xl font-bold text-slate-900">{selectedSavedScan.name}</h2></div>
-              <div className="flex flex-wrap gap-3 text-sm text-slate-400 mb-6">
+              <div className="flex flex-wrap gap-3 text-sm text-slate-400 mb-4">
                 <span>{formatDate(selectedSavedScan.created_at)}</span><span>·</span>
                 <span>{TIME_OPTIONS.find(t => t.value === selectedSavedScan.time_window)?.label || `${selectedSavedScan.time_window}h`}</span><span>·</span>
                 <span>Min: {selectedSavedScan.min_interactions}</span><span>·</span>
                 <span>Max: {selectedSavedScan.max_interactions === 0 ? 'No Limit' : formatNumber(selectedSavedScan.max_interactions)}</span><span>·</span>
                 <span>{selectedSavedScan.total_scraped} scraped → {selectedSavedScan.rising_count} rising</span>
               </div>
+              <button onClick={() => rerunSavedScan(selectedSavedScan)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors mb-6">
+                {Icons.zap} Run This Scan Again
+              </button>
               <RisingPostsList posts={selectedSavedScan.results || []} />
               {(!selectedSavedScan.results || selectedSavedScan.results.length === 0) && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">This saved scan has no results.</p></div>
