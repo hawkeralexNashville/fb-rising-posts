@@ -427,7 +427,7 @@ export default function Dashboard({ supabase, session }) {
               {publicStreams.map((stream) => (
                 <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'public' && selectedPublicStream?.id === stream.id ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
                   onClick={() => selectPublicStream(stream)}>
-                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0 text-emerald-500">{Icons.globe}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{stream.name}</span><span className="text-xs text-slate-400">by {stream.creator_name || 'Anonymous'}</span></div></div>
+                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0 text-emerald-500">{Icons.globe}</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
                 </div>
               ))}
             </>
@@ -618,7 +618,7 @@ export default function Dashboard({ supabase, session }) {
                 <h2 className="text-xl font-bold text-slate-900">{selectedPublicStream.name}</h2>
                 <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-medium text-emerald-600">Public</span>
               </div>
-              <p className="text-sm text-slate-400 mb-5">Shared by {selectedPublicStream.creator_name || 'Anonymous'}</p>
+              <p className="text-sm text-slate-400 mb-5">Public stream</p>
 
               {publicPages.length > 0 && (
                 <div className="mb-5">
