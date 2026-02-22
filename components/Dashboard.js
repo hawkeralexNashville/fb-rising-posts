@@ -57,6 +57,8 @@ function ScanningAnimation() {
 }
 
 const TIME_OPTIONS = [
+  { value: 0.5, label: 'Last 30 minutes' },
+  { value: 1, label: 'Last 1 hour' },
   { value: 2, label: 'Last 2 hours' },
   { value: 6, label: 'Last 6 hours' },
   { value: 12, label: 'Last 12 hours' },
@@ -102,7 +104,7 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.clock} Time Window</label>
-          <select value={timeWindow} onChange={(e) => setTimeWindow(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
+          <select value={timeWindow} onChange={(e) => setTimeWindow(parseFloat(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{TIME_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
         </div>
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.filter} Min Interactions</label>
