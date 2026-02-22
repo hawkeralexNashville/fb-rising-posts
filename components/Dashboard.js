@@ -18,6 +18,57 @@ const Icons = {
   folder: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>,
 }
 
+// ─── Scanning Messages ───
+const SCANNING_MESSAGES = [
+  '🔍 Scanning the internet for your next viral jackpot…',
+  '🧠 Teaching the algorithm what "blow up" really means…',
+  '🚀 Searching for posts that are about to explode…',
+  '💰 Hunting down your next money-maker…',
+  '👀 Watching what\'s trending before everyone else does…',
+  '📈 Separating future legends from forgotten posts…',
+  '🕵️‍♂️ Stalking the algorithm so you don\'t have to…',
+  '🔥 Looking for content that\'s already on fire…',
+  '🧲 Pulling high-engagement posts out of the noise…',
+  '🎯 Locking onto the content that\'s about to take off…',
+]
+
+function ScanningAnimation() {
+  const [index, setIndex] = useState(0)
+  const [fade, setFade] = useState(true)
+
+  useEffect(() => {
+    // Shuffle the starting index
+    setIndex(Math.floor(Math.random() * SCANNING_MESSAGES.length))
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFade(false)
+      setTimeout(() => {
+        setIndex((prev) => (prev + 1) % SCANNING_MESSAGES.length)
+        setFade(true)
+      }, 300)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="my-8 flex flex-col items-center gap-5">
+      {/* Animated progress bar */}
+      <div className="w-full max-w-sm h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-orange-400 via-rose-400 to-orange-400 rounded-full animate-scanning-bar" />
+      </div>
+      {/* Rotating message */}
+      <p
+        className="text-base font-medium text-slate-500 text-center transition-all duration-300 min-h-[28px]"
+        style={{ opacity: fade ? 1 : 0, transform: fade ? 'translateY(0)' : 'translateY(8px)' }}
+      >
+        {SCANNING_MESSAGES[index]}
+      </p>
+    </div>
+  )
+}
+
 const TIME_OPTIONS = [
   { value: 2, label: 'Last 2 hours' },
   { value: 6, label: 'Last 6 hours' },
@@ -364,6 +415,7 @@ export default function Dashboard({ supabase, session }) {
               </form>
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} saveable={true} onSave={() => saveScanResults(quickRisingPosts, quickScanStats, null, quickUrl.trim())} />
+              {isQuickScanning && <ScanningAnimation />}
               <RisingPostsList posts={quickRisingPosts} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
@@ -432,6 +484,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} saveable={true} onSave={() => saveScanResults(risingPosts, scanStats, selectedStreamId)} />
+              {isScanning && <ScanningAnimation />}
               {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>

@@ -11,8 +11,14 @@ module.exports = {
         'slide-up': 'slideUp 0.3s ease-out forwards',
         'fade-in': 'fadeIn 0.5s ease-out forwards',
         'fade-in-up': 'fadeInUp 0.6s ease-out forwards',
+        'scanning-bar': 'scanningBar 1.5s ease-in-out infinite',
       },
       keyframes: {
+        scanningBar: {
+          '0%': { width: '0%', marginLeft: '0%' },
+          '50%': { width: '60%', marginLeft: '20%' },
+          '100%': { width: '0%', marginLeft: '100%' },
+        },
         pulseGlow: {
           '0%, 100%': { opacity: 1 },
           '50%': { opacity: 0.7 },
