@@ -190,6 +190,8 @@ export default function Dashboard({ supabase, session }) {
   const [newPageName, setNewPageName] = useState('')
   const [newPagePlatform, setNewPagePlatform] = useState('facebook')
   const [showAddStream, setShowAddStream] = useState(false)
+  const [showPages, setShowPages] = useState(false)
+  const [showAddPage, setShowAddPage] = useState(false)
   const [timeWindow, setTimeWindow] = useState(6)
   const [minInteractions, setMinInteractions] = useState(50)
   const [maxInteractions, setMaxInteractions] = useState(0)
@@ -212,7 +214,7 @@ export default function Dashboard({ supabase, session }) {
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId) }, [selectedStreamId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false) }, [selectedStreamId])
 
   async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
@@ -516,36 +518,73 @@ export default function Dashboard({ supabase, session }) {
                 </button>
               </div>
 
-              <div className="mb-5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 block">Monitored Pages ({pages.length})</span>
-                {pages.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
+              {/* Compact pages bar */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400">{Icons.stream}</span>
+                    <span className="text-sm font-medium text-slate-700">{pages.length} page{pages.length !== 1 ? 's' : ''} monitored</span>
+                    {pages.length > 0 && (
+                      <div className="flex items-center gap-1 ml-1">
+                        {[...new Set(pages.map(p => p.platform || 'facebook'))].map(plat => (
+                          <span key={plat} className="text-sm" title={PLATFORMS[plat]?.label}>{PLATFORMS[plat]?.icon}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => { setShowAddPage(!showAddPage); if (!showAddPage) setShowPages(false) }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showAddPage ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                      {Icons.plus} Add Page
+                    </button>
+                    {pages.length > 0 && (
+                      <button onClick={() => { setShowPages(!showPages); if (!showPages) setShowAddPage(false) }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showPages ? 'bg-slate-100 text-slate-700 border border-slate-300' : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                        Manage
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${showPages ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expandable add form */}
+                {showAddPage && (
+                  <form onSubmit={(e) => { addPage(e); }} className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex flex-wrap gap-2 items-end">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Platform</label>
+                        <select value={newPagePlatform} onChange={(e) => setNewPagePlatform(e.target.value)} className="px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer pr-10" style={selectStyle}>
+                          {Object.entries(PLATFORMS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex-1 min-w-[200px]"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">URL</label><input type="text" value={newPageUrl} onChange={(e) => setNewPageUrl(e.target.value)} placeholder={PLATFORMS[newPagePlatform].placeholder} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
+                      <div className="max-w-[140px]"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Label</label><input type="text" value={newPageName} onChange={(e) => setNewPageName(e.target.value)} placeholder="Optional" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
+                      <button type="submit" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-xl text-sm font-medium text-white transition-colors">Add</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Expandable pages list */}
+                {showPages && pages.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-1">
                     {pages.map((page) => {
                       const p = PLATFORMS[page.platform] || PLATFORMS.facebook
                       return (
-                        <div key={page.id} className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-sm">
-                          <span className="text-sm" title={p.label}>{p.icon}</span>
-                          <span className="text-slate-700">{page.display_name}</span>
-                          <button onClick={() => deletePage(page.id)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">×</button>
+                        <div key={page.id} className="group flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-sm shrink-0" title={p.label}>{p.icon}</span>
+                            <span className="text-sm text-slate-700 truncate">{page.display_name}</span>
+                            <span className="text-xs text-slate-300 truncate hidden sm:inline">{page.url}</span>
+                          </div>
+                          <button onClick={() => deletePage(page.id)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all shrink-0 ml-2">{Icons.trash}</button>
                         </div>
                       )
                     })}
                   </div>
                 )}
-                <form onSubmit={addPage} className="flex flex-wrap gap-2 items-end mb-6">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Platform</label>
-                    <select value={newPagePlatform} onChange={(e) => setNewPagePlatform(e.target.value)} className="px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer pr-10" style={selectStyle}>
-                      {Object.entries(PLATFORMS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex-1 max-w-sm"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">URL</label><input type="text" value={newPageUrl} onChange={(e) => setNewPageUrl(e.target.value)} placeholder={PLATFORMS[newPagePlatform].placeholder} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
-                  <div className="max-w-[180px]"><label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Label</label><input type="text" value={newPageName} onChange={(e) => setNewPageName(e.target.value)} placeholder="Optional" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" /></div>
-                  <button type="submit" className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 transition-colors">Add Page</button>
-                </form>
               </div>
 
-              <div className="pt-4 border-t border-slate-200 mb-5">
+              <div className="mb-5">
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} />
               </div>
 
