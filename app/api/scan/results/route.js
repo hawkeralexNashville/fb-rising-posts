@@ -18,6 +18,7 @@ function normalizeFacebook(post) {
     page_name: post.pageName || post.authorName || post.pageTitle || post.groupName || post.author?.name || '',
     page_url: post.pageUrl || post.groupUrl || '',
     platform: 'facebook',
+    post_type: post.type || post.postType || post.mediaType || '',
     metrics: { reactions, comments, shares },
     metric_labels: { m1: 'Reactions', m2: 'Comments', m3: 'Shares' },
   }
@@ -40,6 +41,7 @@ function normalizeX(post) {
     page_name: post.author?.userName || post.userName || post.screenName || post.author?.name || '',
     page_url: post.author?.url || '',
     platform: 'x',
+    post_type: post.type || post.mediaType || (post.isRetweet ? 'retweet' : '') || '',
     views,
     metrics: { likes, retweets, replies, views },
     metric_labels: { m1: 'Likes', m2: 'Replies', m3: 'Retweets' },
@@ -62,6 +64,7 @@ function normalizeReddit(post) {
     page_name: post.communityName || post.subreddit || post.subredditName || '',
     page_url: post.communityUrl || '',
     platform: 'reddit',
+    post_type: post.type || post.postType || '',
     metrics: { upvotes, comments, awards },
     metric_labels: { m1: 'Upvotes', m2: 'Comments', m3: 'Awards' },
   }

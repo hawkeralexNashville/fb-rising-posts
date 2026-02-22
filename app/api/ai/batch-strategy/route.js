@@ -71,12 +71,16 @@ Return ONLY valid JSON. No markdown, no backticks, no commentary outside the JSO
     // Condense posts for the prompt
     const postsForPrompt = posts.slice(0, 30).map((p, i) => {
       const parts = [`[${i}] Source: ${p.page_name || 'Unknown'}`]
+      if (p.post_type) parts.push(`Type: ${p.post_type}`)
       if (p.content_preview) parts.push(`Content: ${p.content_preview.slice(0, 300)}`)
       const metrics = []
       if (p.total_interactions) metrics.push(`Total: ${p.total_interactions}`)
       if (p.velocity) metrics.push(`Velocity: ${p.velocity.toFixed(0)}/hr`)
       if (p.delta) metrics.push(`Delta: +${p.delta}`)
       if (p.age_hours) metrics.push(`Age: ${p.age_hours}h`)
+      if (p.shares && p.comments) metrics.push(`Share/Comment: ${(p.shares / Math.max(p.comments, 1)).toFixed(1)}`)
+      if (p.shares) metrics.push(`Shares: ${p.shares}`)
+      if (p.comments) metrics.push(`Comments: ${p.comments}`)
       if (metrics.length) parts.push(`Metrics: ${metrics.join(', ')}`)
       return parts.join('\n')
     }).join('\n\n---\n\n')

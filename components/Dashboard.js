@@ -441,6 +441,7 @@ function RisingPostsList({ posts, activeProject, session }) {
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{post.page_name || 'Unknown'}</span>
                 {post.posted_at && <span className="text-xs text-slate-400">{timeAgo(post.posted_at)}</span>}
                 {post.age_hours && <span className="text-xs text-slate-300">({post.age_hours}h old)</span>}
+                {post.post_type && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{post.post_type}</span>}
               </div>
               {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-orange-500 transition-colors">{Icons.link}</a>}
             </div>

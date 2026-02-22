@@ -71,6 +71,7 @@ ${project.custom_instructions ? `- Custom Instructions: ${project.custom_instruc
 
 TRENDING POST:
 Source: ${post.page_name || 'Unknown'}
+${post.post_type ? `Post Type: ${post.post_type}` : ''}
 Content: ${post.content_preview || '[No text content]'}
 
 ENGAGEMENT METRICS:

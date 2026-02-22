@@ -18,6 +18,7 @@ function normalizeFacebookGroup(post) {
     page_name: post.groupName || post.pageName || post.authorName || post.pageTitle || post.author?.name || '',
     page_url: post.groupUrl || post.pageUrl || '',
     platform: 'facebook',
+    post_type: post.type || post.postType || post.mediaType || '',
     metrics: { reactions, comments, shares },
     metric_labels: { m1: 'Reactions', m2: 'Comments', m3: 'Shares' },
   }
