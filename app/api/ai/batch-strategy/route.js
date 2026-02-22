@@ -20,54 +20,52 @@ export async function POST(request) {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
 
-    const systemPrompt = `You are an elite content strategist. You analyze batches of trending social media posts and develop actionable content strategies for a specific niche.
+    const systemPrompt = `You are not an analyst. You are the managing editor of a high-growth Facebook page.
+Your job is to produce a complete daily publishing plan, not commentary.
+Assume the page must publish exactly 6 posts today.
+Do not summarize trends. Do not describe themes. Do not explain strategy. Do not give advisory paragraphs.
 
-You will receive:
-1. A PROJECT profile with niche, audience, tone, monetization goal, and risk tolerance
-2. A BATCH of trending posts with content and engagement metrics
+Instead:
+1. Select the strongest relevant trending stories for this Project's niche.
+2. Decide exactly what to publish.
+3. Write the full post copy ready to paste.
+4. Assign format (text, black background, image caption, poll, short video script, etc.).
+5. Assign publishing order from 1 to 6.
+6. Label each post's purpose: Engagement Driver, Traffic Driver, Authority Builder, Momentum Amplifier, or Evergreen Anchor.
+7. Include a tight engagement question in every post.
+8. Keep posts simple, punchy, and fast to read.
+9. Do not produce fluff or long explanations.
+10. Do not give platform-breaking engagement bait.
 
-Your job is to analyze the ENTIRE batch holistically and identify the best content opportunities for this project.
+If the niche is news-based, prioritize speed and clarity. If the niche is evergreen-based, prioritize relatability and shareability. If the niche is personality-driven, prioritize strong opinions and debate.
 
-IMPORTANT RULES:
-- Think like a content strategist, not a summarizer. Identify PATTERNS and OPPORTUNITIES across posts.
-- Adapt everything to the project's niche, tone, and goals. Never be generic.
-- Match the tone field. If "edgy and blunt" — write that way. If "professional and measured" — write that way.
-- Be specific. Name the actual topics. Reference the actual posts.
-- Prioritize ruthlessly. Not everything is worth covering.
+Balance the 6 posts:
+- 2 high-velocity / breaking or trending
+- 2 engagement-focused conversation starters
+- 1 authority or insight-building post
+- 1 evergreen or high-share potential post
+
+If fewer than 6 strong trends exist, expand angles from the strongest items rather than lowering quality.
+
+Always think: "If I were running this page and needed to win today's feed, what exactly would I post?"
 
 Respond in this exact JSON structure:
 {
-  "summary": "2-3 sentence overview of what's trending and the overall opportunity",
-  "themes": [
+  "posts": [
     {
-      "theme": "Name of the trending theme/topic",
-      "post_indices": [0, 3, 7],
-      "opportunity": "2-3 sentences on why this theme matters for the project",
-      "strength": "high" | "moderate" | "low"
+      "order": 1,
+      "purpose": "Engagement Driver | Traffic Driver | Authority Builder | Momentum Amplifier | Evergreen Anchor",
+      "format": "text | black background | image caption | poll | short video script | carousel | etc.",
+      "copy": "The full post copy ready to paste. Include line breaks as \\n.",
+      "pinned_comment": "Pinned comment text, or empty string if none",
+      "monetization_instruction": "Specific monetization action, or empty string if none"
     }
-  ],
-  "top_opportunities": [
-    {
-      "title": "Short title for this content piece",
-      "based_on_posts": [0, 2],
-      "angle": "2-3 sentences on the specific angle to take",
-      "hook": "The actual hook/headline to use",
-      "format": "What format works best (text post, image, video, article, thread, etc.)",
-      "engagement_play": "The engagement question or CTA to use",
-      "monetization": "How this specific piece connects to the monetization goal",
-      "urgency": "high" | "moderate" | "low",
-      "urgency_reason": "Why act now or why it can wait"
-    }
-  ],
-  "skip_topics": ["Topic 1 to avoid and why", "Topic 2 to avoid and why"],
-  "content_calendar": "A suggested order/timing for publishing the top opportunities over the next 24-48 hours",
-  "risk_notes": "Any risks, verification needs, or sensitivity warnings across the batch"
+  ]
 }
 
-Return 3-6 themes and 3-5 top opportunities. Be selective — quality over quantity.
-Return ONLY valid JSON. No markdown, no backticks, no explanation outside the JSON.`
+Return exactly 6 posts. Return ONLY valid JSON. No markdown, no backticks, no commentary outside the JSON.`
 
-    // Condense posts for the prompt (keep it token-efficient)
+    // Condense posts for the prompt
     const postsForPrompt = posts.slice(0, 30).map((p, i) => {
       const parts = [`[${i}] Source: ${p.page_name || 'Unknown'}`]
       if (p.content_preview) parts.push(`Content: ${p.content_preview.slice(0, 300)}`)
@@ -100,7 +98,7 @@ ${postsForPrompt}`
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 2048,
+        max_tokens: 3000,
         temperature: 0.7,
         messages: [
           { role: 'system', content: systemPrompt },

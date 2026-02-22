@@ -191,16 +191,15 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   )
 }
 
-// ─── Batch Strategy Panel ───
+// ─── Batch Strategy Panel (Daily Publishing Plan) ───
 function BatchStrategyPanel({ strategy, loading, error, posts }) {
-  const [expanded, setExpanded] = useState({})
-  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
-  const copyText = (text) => { navigator.clipboard.writeText(text) }
+  const [copiedId, setCopiedId] = useState(null)
+  const copyText = (text, id) => { navigator.clipboard.writeText(text.replace(/\\n/g, '\n')); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }
 
   if (loading) return (
     <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6 mb-5 animate-pulse">
-      <div className="flex items-center gap-3"><span className="text-xl">🧠</span><span className="text-base font-semibold text-violet-700">Analyzing {posts?.length || 0} trending posts…</span></div>
-      <p className="text-sm text-violet-500 mt-2">Building your content strategy. This takes 10-20 seconds.</p>
+      <div className="flex items-center gap-3"><span className="text-xl">📋</span><span className="text-base font-semibold text-violet-700">Building your publishing plan from {posts?.length || 0} trending posts…</span></div>
+      <p className="text-sm text-violet-500 mt-2">Writing 6 ready-to-paste posts. 15-30 seconds.</p>
     </div>
   )
   if (error) return (
@@ -208,127 +207,82 @@ function BatchStrategyPanel({ strategy, loading, error, posts }) {
       <p className="text-sm text-red-600">{error}</p>
     </div>
   )
-  if (!strategy) return null
+  if (!strategy?.posts?.length) return null
 
-  const strengthColor = (s) => s === 'high' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : s === 'moderate' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'
-  const urgencyColor = (u) => u === 'high' ? 'text-red-500' : u === 'moderate' ? 'text-amber-500' : 'text-slate-400'
+  const purposeStyle = {
+    'Engagement Driver': { color: 'bg-blue-50 text-blue-600 border-blue-200', icon: '💬' },
+    'Traffic Driver': { color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: '🔗' },
+    'Authority Builder': { color: 'bg-purple-50 text-purple-600 border-purple-200', icon: '🏛️' },
+    'Momentum Amplifier': { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: '🚀' },
+    'Evergreen Anchor': { color: 'bg-teal-50 text-teal-600 border-teal-200', icon: '🌲' },
+  }
 
   return (
-    <div className="bg-white border-2 border-violet-200 rounded-2xl overflow-hidden mb-5">
-      <div className="bg-gradient-to-r from-violet-50 to-purple-50 px-6 py-4 border-b border-violet-100">
-        <div className="flex items-center gap-2 mb-2"><span className="text-xl">🧠</span><h3 className="text-lg font-bold text-violet-800">Content Strategy</h3></div>
-        {strategy.summary && <p className="text-sm text-violet-700 leading-relaxed">{strategy.summary}</p>}
+    <div className="mb-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-xl">📋</span>
+        <h3 className="text-lg font-bold text-slate-900">Daily Publishing Plan</h3>
+        <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{strategy.posts.length} posts</span>
       </div>
 
-      {/* Themes */}
-      {strategy.themes?.length > 0 && (
-        <div className="px-6 py-4 border-b border-slate-100">
-          <button onClick={() => toggle('themes')} className="flex items-center justify-between w-full">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Trending Themes ({strategy.themes.length})</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.themes !== false ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-          </button>
-          {expanded.themes !== false && (
-            <div className="mt-3 space-y-2">
-              {strategy.themes.map((theme, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${strengthColor(theme.strength)}`}>{theme.strength}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{theme.theme}</p>
-                    <p className="text-sm text-slate-600 mt-0.5">{theme.opportunity}</p>
-                    {theme.post_indices?.length > 0 && <p className="text-xs text-slate-400 mt-1">Posts: {theme.post_indices.map(idx => `#${idx + 1}`).join(', ')}</p>}
-                  </div>
-                </div>
-              ))}
+      {strategy.posts.map((post, i) => {
+        const ps = purposeStyle[post.purpose] || { color: 'bg-slate-50 text-slate-600 border-slate-200', icon: '📝' }
+        const displayCopy = (post.copy || '').replace(/\\n/g, '\n')
+        const postId = `post-${post.order || i}`
+        return (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-colors">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-bold text-slate-300">#{post.order || i + 1}</span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ps.color}`}>{ps.icon} {post.purpose}</span>
+                {post.format && <span className="text-xs text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{post.format}</span>}
+              </div>
+              <button onClick={() => copyText(displayCopy, postId)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copiedId === postId ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-white border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-300'}`}>
+                {copiedId === postId ? (
+                  <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg> Copied!</>
+                ) : (
+                  <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg> Copy Post</>
+                )}
+              </button>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Top Opportunities */}
-      {strategy.top_opportunities?.length > 0 && (
-        <div className="px-6 py-4 border-b border-slate-100">
-          <button onClick={() => toggle('opps')} className="flex items-center justify-between w-full">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Top Opportunities ({strategy.top_opportunities.length})</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.opps !== false ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-          </button>
-          {expanded.opps !== false && (
-            <div className="mt-3 space-y-4">
-              {strategy.top_opportunities.map((opp, i) => (
-                <div key={i} className="border border-violet-100 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-violet-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-violet-600">#{i + 1}</span>
-                      <span className="text-sm font-semibold text-slate-800">{opp.title}</span>
+            {/* Post copy */}
+            <div className="px-5 py-4">
+              <div className="whitespace-pre-wrap text-[15px] text-slate-800 leading-relaxed">{displayCopy}</div>
+            </div>
+
+            {/* Pinned comment & monetization */}
+            {(post.pinned_comment || post.monetization_instruction) && (
+              <div className="px-5 pb-4 space-y-2">
+                {post.pinned_comment && (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
+                    <span className="text-xs mt-0.5">📌</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-blue-500 mb-0.5">Pinned Comment</p>
+                      <p className="text-sm text-slate-700">{post.pinned_comment}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {opp.format && <span className="text-xs bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full">{opp.format}</span>}
-                      {opp.urgency && <span className={`text-xs font-medium ${urgencyColor(opp.urgency)}`}>{opp.urgency === 'high' ? '🔥 Act now' : opp.urgency === 'moderate' ? '⏰ Soon' : '📋 When ready'}</span>}
+                    <button onClick={() => copyText(post.pinned_comment, `pin-${i}`)}
+                      className={`shrink-0 text-xs px-2 py-1 rounded transition-all ${copiedId === `pin-${i}` ? 'text-emerald-500' : 'text-blue-300 hover:text-blue-500'}`}>
+                      {copiedId === `pin-${i}` ? '✓' : 'Copy'}
+                    </button>
+                  </div>
+                )}
+                {post.monetization_instruction && (
+                  <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
+                    <span className="text-xs mt-0.5">💰</span>
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-500 mb-0.5">Monetization</p>
+                      <p className="text-sm text-slate-600">{post.monetization_instruction}</p>
                     </div>
                   </div>
-                  <div className="px-4 py-3 space-y-3">
-                    {opp.angle && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Angle</p><p className="text-sm text-slate-700">{opp.angle}</p></div>}
-                    {opp.hook && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Hook</p>
-                        <div className="group flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
-                          <p className="text-sm font-medium text-slate-800 flex-1">{opp.hook}</p>
-                          <button onClick={() => copyText(opp.hook)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {opp.engagement_play && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Engagement Play</p>
-                        <div className="group flex items-start gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
-                          <p className="text-sm text-slate-700 flex-1">{opp.engagement_play}</p>
-                          <button onClick={() => copyText(opp.engagement_play)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {opp.monetization && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Monetization</p><p className="text-sm text-slate-600">{opp.monetization}</p></div>}
-                    {opp.urgency_reason && <p className="text-xs text-slate-400 italic">{opp.urgency_reason}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Skip Topics */}
-      {strategy.skip_topics?.length > 0 && (
-        <div className="px-6 py-4 border-b border-slate-100">
-          <button onClick={() => toggle('skip')} className="flex items-center justify-between w-full">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Skip These Topics</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-slate-400 transition-transform ${expanded.skip ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-          </button>
-          {expanded.skip && (
-            <div className="mt-2 space-y-1">
-              {strategy.skip_topics.map((topic, i) => <p key={i} className="text-sm text-slate-500 pl-2 border-l-2 border-slate-200">🚫 {topic}</p>)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Calendar */}
-      {strategy.content_calendar && (
-        <div className="px-6 py-4 border-b border-slate-100">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">📅 Content Calendar (Next 24-48h)</p>
-          <p className="text-sm text-slate-700 leading-relaxed">{strategy.content_calendar}</p>
-        </div>
-      )}
-
-      {/* Risk Notes */}
-      {strategy.risk_notes && (
-        <div className="px-6 py-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-500 mb-1">⚠️ Risks & Warnings</p>
-          <p className="text-sm text-slate-600">{strategy.risk_notes}</p>
-        </div>
-      )}
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1225,7 +1179,7 @@ export default function Dashboard({ supabase, session }) {
               {activeProject && quickRisingPosts.length > 0 && !batchStrategy.strategy && (
                 <button onClick={() => generateBatchStrategy(quickRisingPosts)} disabled={batchStrategy.loading}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${quickRisingPosts.length} Posts`}
+                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${quickRisingPosts.length} Posts`}
                 </button>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={quickRisingPosts} />
@@ -1259,7 +1213,7 @@ export default function Dashboard({ supabase, session }) {
               {activeProject && selectedSavedScan.results?.length > 0 && !batchStrategy.strategy && (
                 <button onClick={() => generateBatchStrategy(selectedSavedScan.results)} disabled={batchStrategy.loading}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${selectedSavedScan.results.length} Posts`}
+                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${selectedSavedScan.results.length} Posts`}
                 </button>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={selectedSavedScan.results} />
@@ -1397,7 +1351,7 @@ export default function Dashboard({ supabase, session }) {
               {activeProject && filteredPosts.length > 0 && !batchStrategy.strategy && (
                 <button onClick={() => generateBatchStrategy(filteredPosts)} disabled={batchStrategy.loading}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${filteredPosts.length} Posts`}
+                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${filteredPosts.length} Posts`}
                 </button>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={filteredPosts} />
@@ -1483,7 +1437,7 @@ export default function Dashboard({ supabase, session }) {
               {activeProject && risingPosts.length > 0 && !batchStrategy.strategy && (
                 <button onClick={() => generateBatchStrategy(risingPosts)} disabled={batchStrategy.loading}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Generating Strategy…' : `Generate Strategy from ${risingPosts.length} Posts`}
+                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${risingPosts.length} Posts`}
                 </button>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={risingPosts} />
