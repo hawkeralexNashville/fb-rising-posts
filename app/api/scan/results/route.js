@@ -160,12 +160,25 @@ export async function GET(request) {
       if (prev) delta = post.total_interactions - prev.total_interactions
 
       let isRising = false
-      if (prev && delta !== null) { isRising = delta >= settings.min_delta }
-      else if (velocity !== null) { isRising = velocity >= settings.min_velocity }
-      else { isRising = post.total_interactions >= settings.min_velocity * 2 }
+      let reason = ''
+      if (prev && delta !== null) { 
+        isRising = delta >= settings.min_delta
+        if (isRising) {
+          const timeSinceLast = prev.scraped_at ? Math.round((nowMs - new Date(prev.scraped_at).getTime()) / 60000) : null
+          reason = `Gained ${delta.toLocaleString()} interactions since last scan${timeSinceLast ? ` (${timeSinceLast < 60 ? timeSinceLast + 'm' : Math.round(timeSinceLast / 60) + 'h'} ago)` : ''}`
+        }
+      }
+      else if (velocity !== null) { 
+        isRising = velocity >= settings.min_velocity
+        if (isRising) reason = `Averaging ${Math.round(velocity).toLocaleString()} interactions/hr over ${ageHours < 1 ? Math.round(ageHours * 60) + ' minutes' : Math.round(ageHours) + ' hours'}`
+      }
+      else { 
+        isRising = post.total_interactions >= settings.min_velocity * 2
+        if (isRising) reason = `${post.total_interactions.toLocaleString()} interactions with no timestamp — flagged for high volume`
+      }
 
       if (!isRising) { filteredOut++; continue }
-      risingPosts.push({ ...post, velocity, delta, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null })
+      risingPosts.push({ ...post, velocity, delta, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null, reason })
     }
 
     risingPosts.sort((a, b) => {

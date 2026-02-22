@@ -144,7 +144,8 @@ function RisingPostsList({ posts }) {
               </div>
               {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-orange-500 transition-colors">{Icons.link}</a>}
             </div>
-            {post.content_preview && <p className="text-base text-slate-700 mb-4 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
+            {post.content_preview && <p className="text-base text-slate-700 mb-3 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
+            {post.reason && <p className="text-xs text-orange-500 bg-orange-50 border border-orange-100 rounded-lg px-3 py-1.5 mb-3 inline-block">⚡ {post.reason}</p>}
             <div className="flex items-center gap-5 text-sm">
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Total</span><span className="font-semibold text-slate-800">{formatNumber(post.total_interactions)}</span></div>
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Velocity</span><span className="font-semibold text-orange-500">{post.velocity?.toFixed(0) || '—'}/hr</span></div>
