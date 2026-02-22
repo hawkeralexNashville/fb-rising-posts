@@ -39,12 +39,12 @@ export async function GET(request) {
       }, { status: 500 })
     }
 
-    const { data: scans } = await adminClient.from('saved_scans').select('user_id, id')
+    const { data: scans } = await adminClient.from('saved_scans').select('user_id, id, cost_usd')
     const { data: streams } = await adminClient.from('streams').select('user_id, id')
 
-    // Get cost from post_snapshots or estimate from scan count
     const scanCountMap = {}
-    if (scans) { for (const s of scans) { scanCountMap[s.user_id] = (scanCountMap[s.user_id] || 0) + 1 } }
+    const costMap = {}
+    if (scans) { for (const s of scans) { scanCountMap[s.user_id] = (scanCountMap[s.user_id] || 0) + 1; costMap[s.user_id] = (costMap[s.user_id] || 0) + (s.cost_usd || 0) } }
 
     const streamCountMap = {}
     if (streams) { for (const s of streams) { streamCountMap[s.user_id] = (streamCountMap[s.user_id] || 0) + 1 } }
@@ -56,6 +56,7 @@ export async function GET(request) {
       last_sign_in_at: u.last_sign_in_at,
       scan_count: scanCountMap[u.id] || 0,
       streams: streamCountMap[u.id] || 0,
+      total_cost: costMap[u.id] || 0,
     }))
 
     result.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))

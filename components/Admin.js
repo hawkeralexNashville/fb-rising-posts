@@ -30,6 +30,7 @@ export default function Admin({ session }) {
   const totalUsers = users.length
   const totalScans = users.reduce((sum, u) => sum + (u.scan_count || 0), 0)
   const totalStreams = users.reduce((sum, u) => sum + (u.streams || 0), 0)
+  const totalCost = users.reduce((sum, u) => sum + (u.total_cost || 0), 0)
 
   function formatDate(dateStr) {
     if (!dateStr) return '—'
@@ -59,7 +60,7 @@ export default function Admin({ session }) {
         <p className="text-base text-slate-500 mb-6">User management and platform analytics.</p>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-4 gap-4 mb-8">
           <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Total Users</p>
             <p className="text-2xl font-bold text-slate-900">{totalUsers}</p>
@@ -71,6 +72,10 @@ export default function Admin({ session }) {
           <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Total Streams</p>
             <p className="text-2xl font-bold text-slate-900">{totalStreams}</p>
+          </div>
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-orange-400 mb-1">Total Apify Cost</p>
+            <p className="text-2xl font-bold text-orange-600">${totalCost.toFixed(2)}</p>
           </div>
         </div>
 
@@ -94,6 +99,7 @@ export default function Admin({ session }) {
                   <th className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 px-5 py-3">Last Active</th>
                   <th className="text-right text-xs font-semibold uppercase tracking-wider text-slate-400 px-5 py-3">Streams</th>
                   <th className="text-right text-xs font-semibold uppercase tracking-wider text-slate-400 px-5 py-3">Scans</th>
+                  <th className="text-right text-xs font-semibold uppercase tracking-wider text-slate-400 px-5 py-3">Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,7 +118,12 @@ export default function Admin({ session }) {
                       <span className={`text-sm font-medium ${user.streams > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{user.streams}</span>
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <span className={`text-sm font-medium ${user.scan_count > 0 ? 'text-orange-600' : 'text-slate-300'}`}>{user.scan_count}</span>
+                      <span className={`text-sm font-medium ${user.scan_count > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{user.scan_count}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={`text-sm font-medium ${user.total_cost > 0 ? 'text-orange-600' : 'text-slate-300'}`}>
+                        {user.total_cost > 0 ? `$${user.total_cost.toFixed(4)}` : '—'}
+                      </span>
                     </td>
                   </tr>
                 ))}

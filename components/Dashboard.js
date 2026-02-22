@@ -275,7 +275,7 @@ export default function Dashboard({ supabase, session }) {
     const now = new Date()
     const timeLabel = TIME_OPTIONS.find(t => t.value === timeWindow)?.label || `${timeWindow}h`
     const name = `${streamName || source || 'Quick Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-    const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
+    const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]) }
   }
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { setSelectedSavedScan(data); setView('saved') } }
@@ -366,7 +366,7 @@ export default function Dashboard({ supabase, session }) {
       const cost = finalCost ?? costUsd
       setResults(posts); setStats({ totalScraped, filteredOut, costUsd: cost }); setStatus('done')
       setMessage(posts.length > 0 ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
-      if (posts.length > 0) saveScanResults(posts, { totalScraped, filteredOut }, streamId, source)
+      if (posts.length > 0) saveScanResults(posts, { totalScraped, filteredOut, costUsd: cost }, streamId, source)
     } catch (err) { setStatus('error'); setMessage(err.message) }
   }
 
@@ -403,7 +403,7 @@ export default function Dashboard({ supabase, session }) {
         allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
         setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
         setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} across ${platforms.length} platforms.` : `No posts meet your current filters.`)
-        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered }, selectedStreamId, null)
+        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered, costUsd: totalCost }, selectedStreamId, null)
       } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
     }
   }
@@ -441,7 +441,7 @@ export default function Dashboard({ supabase, session }) {
         allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
         setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
         setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
-        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered }, null, selectedPublicStream?.name)
+        if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered, costUsd: totalCost }, null, selectedPublicStream?.name)
       } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
     }
   }
