@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Account from './Account'
+import Admin from './Admin'
 
 // ─── Platform Config ───
 const PLATFORMS = {
@@ -211,6 +212,7 @@ export default function Dashboard({ supabase, session }) {
   const [publicStreams, setPublicStreams] = useState([])
   const [selectedPublicStream, setSelectedPublicStream] = useState(null)
   const [publicPages, setPublicPages] = useState([])
+  const [isAdmin, setIsAdmin] = useState(false)
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
@@ -218,7 +220,7 @@ export default function Dashboard({ supabase, session }) {
 
   async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
-  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours) } }
+  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
   async function toggleStreamPublic(streamId, isPublic) {
@@ -432,7 +434,14 @@ export default function Dashboard({ supabase, session }) {
         </div>
 
         <div className="shrink-0 p-3 border-t border-slate-100 flex flex-col gap-1">
-          <button onClick={() => { setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null) }}
+          {isAdmin && (
+            <button onClick={() => { setView('admin'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+              className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'admin' ? 'bg-orange-50 text-orange-600 font-medium border border-orange-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+              <span>Admin</span>
+            </button>
+          )}
+          <button onClick={() => { setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'account' ? 'bg-slate-100 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
             {Icons.user}<span>Account</span>
           </button>
@@ -447,6 +456,7 @@ export default function Dashboard({ supabase, session }) {
       {/* ─── Main ─── */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
+        {view === 'admin' && isAdmin && <Admin session={session} />}
 
         {/* ─── Quick Scan ─── */}
         {view === 'quick' && (
