@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Account from './Account'
 
 // ─── Icons ───
 const Icons = {
@@ -16,6 +17,7 @@ const Icons = {
   filter: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>,
   save: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>,
   folder: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>,
+  user: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
 }
 
 // ─── Scanning Messages ───
@@ -210,7 +212,6 @@ export default function Dashboard({ supabase, session }) {
   const [newPageUrl, setNewPageUrl] = useState('')
   const [newPageName, setNewPageName] = useState('')
   const [showAddStream, setShowAddStream] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [timeWindow, setTimeWindow] = useState(6)
   const [minInteractions, setMinInteractions] = useState(50)
   const [maxInteractions, setMaxInteractions] = useState(0)
@@ -370,33 +371,33 @@ export default function Dashboard({ supabase, session }) {
           )}
         </div>
 
-        <div className="p-3 border-t border-slate-100 space-y-1">
-          <button onClick={() => setShowSettings(!showSettings)} className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">{Icons.settings}<span>Advanced Settings</span></button>
-          <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">{Icons.logout}<span>Sign Out</span></button>
+        <div className="p-3 border-t border-slate-100">
+          <button onClick={() => { setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null) }}
+            className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'account' ? 'bg-slate-100 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+            {Icons.user}<span>Account</span>
+          </button>
         </div>
       </div>
 
       {/* ─── Main ─── */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* Advanced Settings */}
-        {showSettings && (
-          <div className="bg-white border-b border-slate-200 p-6 animate-slide-up">
-            <h3 className="text-base font-semibold text-slate-900 mb-1">Advanced: Velocity &amp; Delta Thresholds</h3>
-            <p className="text-sm text-slate-400 mb-5">Controls how the algorithm judges &quot;rising.&quot; Lower = more results, higher = stricter.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-md">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Min Velocity (interactions/hr)</label>
-                <input type="number" min="1" value={settings.min_velocity} onChange={(e) => setSettings({ ...settings, min_velocity: parseInt(e.target.value) || 1 })} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" />
-                <p className="text-xs text-slate-400 mt-1">First-seen posts must grow this fast</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Min Delta (between scans)</label>
-                <input type="number" min="1" value={settings.min_delta} onChange={(e) => setSettings({ ...settings, min_delta: parseInt(e.target.value) || 1 })} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" />
-                <p className="text-xs text-slate-400 mt-1">Repeat-seen posts must gain this many</p>
-              </div>
-            </div>
-            <button onClick={() => { saveSettings(); setShowSettings(false) }} className="mt-5 px-5 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-sm font-semibold text-white transition-colors">Save Settings</button>
-          </div>
+        {/* ─── Account View ─── */}
+        {view === 'account' && (
+          <Account
+            supabase={supabase}
+            session={session}
+            settings={settings}
+            setSettings={setSettings}
+            saveSettings={saveSettings}
+            timeWindow={timeWindow}
+            setTimeWindow={setTimeWindow}
+            minInteractions={minInteractions}
+            setMinInteractions={setMinInteractions}
+            maxInteractions={maxInteractions}
+            setMaxInteractions={setMaxInteractions}
+            streams={streams}
+            savedScans={savedScans}
+          />
         )}
 
         {/* ─── Quick Scan ─── */}
