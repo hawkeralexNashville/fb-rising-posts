@@ -11,6 +11,7 @@ function parseApifyError(status, body) {
 }
 
 function getResultsLimit(timeWindowHours) {
+  if (timeWindowHours <= 1) return 5
   if (timeWindowHours <= 2) return 5
   if (timeWindowHours <= 6) return 10
   if (timeWindowHours <= 12) return 15
@@ -19,7 +20,7 @@ function getResultsLimit(timeWindowHours) {
 }
 
 // Platform-specific Apify actor configs
-function getActorConfig(platform, pageUrls, resultsLimit) {
+function getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours) {
   switch (platform) {
     case 'x':
       // Extract handles from URLs where possible
@@ -48,27 +49,14 @@ function getActorConfig(platform, pageUrls, resultsLimit) {
       }
     case 'facebook':
     default:
-      // Detect if any URLs are group URLs
-      const groupUrls = pageUrls.filter(url => /facebook\.com\/groups\//i.test(url))
-      const pageOnlyUrls = pageUrls.filter(url => !/facebook\.com\/groups\//i.test(url))
-      
-      // If all URLs are groups, use the dedicated groups scraper
-      if (groupUrls.length > 0 && pageOnlyUrls.length === 0) {
-        return {
-          actorId: 'apify~facebook-groups-scraper',
-          input: {
-            startUrls: groupUrls.map((url) => ({ url })),
-            resultsPerPage: resultsLimit,
-            sortPostsBy: 'new',
-          },
-        }
-      }
-      // If mixed, use the general posts scraper (handles both)
+      // Calculate newerThan based on actual time window
+      const newerThan = new Date(Date.now() - timeWindowHours * 3600000).toISOString()
       return {
         actorId: 'apify~facebook-posts-scraper',
         input: {
           startUrls: pageUrls.map((url) => ({ url })),
           resultsLimit,
+          newerThan,
         },
       }
   }
@@ -93,7 +81,7 @@ export async function POST(request) {
     if (!process.env.APIFY_API_TOKEN) return NextResponse.json({ error: 'Apify API token not configured.' }, { status: 500 })
 
     const resultsLimit = getResultsLimit(timeWindowHours || 24)
-    const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit)
+    const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours || 24)
 
     const apifyRes = await fetch(
       `https://api.apify.com/v2/acts/${actorId}/runs?token=${process.env.APIFY_API_TOKEN}`,
