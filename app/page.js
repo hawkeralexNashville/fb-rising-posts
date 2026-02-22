@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import Homepage from '../components/Homepage'
 import Auth from '../components/Auth'
 import Dashboard from '../components/Dashboard'
 
@@ -12,18 +13,19 @@ const supabase = createClient(
 export default function Home() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session)
+        if (session) setShowAuth(false)
       }
     )
 
@@ -33,14 +35,23 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
       </div>
     )
   }
 
-  if (!session) {
-    return <Auth supabase={supabase} />
+  if (session) {
+    return <Dashboard supabase={supabase} session={session} />
   }
 
-  return <Dashboard supabase={supabase} session={session} />
+  if (showAuth) {
+    return <Auth supabase={supabase} initialMode={authMode} onBack={() => setShowAuth(false)} />
+  }
+
+  return (
+    <Homepage
+      onSignIn={() => { setAuthMode('login'); setShowAuth(true) }}
+      onGetStarted={() => { setAuthMode('signup'); setShowAuth(true) }}
+    />
+  )
 }
