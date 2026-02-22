@@ -1,9 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+function parseApifyError(status, body) {
+  const msg = (body?.error?.message || body?.error || body?.message || '').toLowerCase()
+
+  if (status === 402 || msg.includes('usage') || msg.includes('credit') || msg.includes('limit exceeded') || msg.includes('payment') || msg.includes('billing') || msg.includes('subscription')) {
+    return 'Apify account out of credits. Add funds at apify.com/billing'
+  }
+  if (status === 401 || status === 403 || msg.includes('token') || msg.includes('unauthorized') || msg.includes('forbidden')) {
+    return 'Invalid Apify API token. Check your token in Settings > Integrations at apify.com'
+  }
+  if (status === 429 || msg.includes('rate')) {
+    return 'Apify rate limit hit. Wait a few minutes and try again.'
+  }
+  if (status >= 500) {
+    return 'Apify servers are having issues. Try again in a few minutes.'
+  }
+  return body?.error?.message || body?.error || 'Failed to start Apify scraper. Check your Apify account.'
+}
+
 export async function POST(request) {
   try {
-    // Verify user auth
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +43,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No page URLs provided' }, { status: 400 })
     }
 
-    // Start Apify Facebook Posts Scraper
+    if (!process.env.APIFY_API_TOKEN) {
+      return NextResponse.json({ error: 'Apify API token not configured. Add APIFY_API_TOKEN to your environment variables.' }, { status: 500 })
+    }
+
     const apifyRes = await fetch(
       `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${process.env.APIFY_API_TOKEN}`,
       {
@@ -34,15 +54,17 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: pageUrls.map((url) => ({ url })),
-          resultsLimit: 30, // Last ~30 posts per page
+          resultsLimit: 30,
         }),
       }
     )
 
     if (!apifyRes.ok) {
-      const err = await apifyRes.text()
-      console.error('Apify start error:', err)
-      return NextResponse.json({ error: 'Failed to start Apify scraper' }, { status: 500 })
+      let errBody
+      try { errBody = await apifyRes.json() } catch { errBody = {} }
+      const userMessage = parseApifyError(apifyRes.status, errBody)
+      console.error('Apify start error:', apifyRes.status, errBody)
+      return NextResponse.json({ error: userMessage, userMessage }, { status: 502 })
     }
 
     const apifyData = await apifyRes.json()

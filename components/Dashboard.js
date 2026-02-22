@@ -43,6 +43,11 @@ const Icons = {
       <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
     </svg>
   ),
+  zap: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  ),
 }
 
 // ─── Helpers ───
@@ -61,8 +66,74 @@ function formatNumber(n) {
   return n?.toString() || '0'
 }
 
+// ─── Rising Posts List Component ───
+function RisingPostsList({ posts }) {
+  if (!posts || posts.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      {posts.map((post, i) => (
+        <div
+          key={post.post_id || i}
+          className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 animate-slide-up"
+          style={{ animationDelay: `${i * 50}ms` }}
+        >
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                {post.page_name || 'Unknown Page'}
+              </span>
+              {post.posted_at && (
+                <span className="text-[10px] text-slate-600 ml-2">
+                  {timeAgo(post.posted_at)}
+                </span>
+              )}
+            </div>
+            {post.post_url && (
+              <a
+                href={post.post_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-slate-600 hover:text-emerald-400 transition-colors"
+              >
+                {Icons.link}
+              </a>
+            )}
+          </div>
+          {post.content_preview && (
+            <p className="text-sm text-slate-300 mb-3 line-clamp-3 leading-relaxed">
+              {post.content_preview}
+            </p>
+          )}
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">Total</span>
+              <span className="font-semibold text-slate-200">{formatNumber(post.total_interactions)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">Velocity</span>
+              <span className="font-semibold text-emerald-400">{post.velocity?.toFixed(0) || '—'}/hr</span>
+            </div>
+            {post.delta !== null && post.delta !== undefined && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500">Delta</span>
+                <span className="font-semibold text-emerald-400">+{post.delta}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3 ml-auto text-slate-600">
+              <span>👍 {formatNumber(post.reactions)}</span>
+              <span>💬 {formatNumber(post.comments)}</span>
+              <span>🔄 {formatNumber(post.shares)}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard({ supabase, session }) {
-  // ─── State ───
+  const [view, setView] = useState('quick')
   const [streams, setStreams] = useState([])
   const [selectedStreamId, setSelectedStreamId] = useState(null)
   const [pages, setPages] = useState([])
@@ -71,7 +142,7 @@ export default function Dashboard({ supabase, session }) {
   const [newPageName, setNewPageName] = useState('')
   const [showAddStream, setShowAddStream] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [scanStatus, setScanStatus] = useState('idle') // idle | starting | scanning | processing | done | error
+  const [scanStatus, setScanStatus] = useState('idle')
   const [scanMessage, setScanMessage] = useState('')
   const [risingPosts, setRisingPosts] = useState([])
   const [settings, setSettings] = useState({
@@ -79,17 +150,19 @@ export default function Dashboard({ supabase, session }) {
     min_delta: 20,
     max_post_age_hours: 48,
   })
+  const [quickUrl, setQuickUrl] = useState('')
+  const [quickScanStatus, setQuickScanStatus] = useState('idle')
+  const [quickScanMessage, setQuickScanMessage] = useState('')
+  const [quickRisingPosts, setQuickRisingPosts] = useState([])
 
   const userId = session?.user?.id
 
-  // ─── Load streams on mount ───
   useEffect(() => {
     if (!userId) return
     loadStreams()
     loadSettings()
   }, [userId])
 
-  // ─── Load pages when stream changes ───
   useEffect(() => {
     if (!selectedStreamId) {
       setPages([])
@@ -99,16 +172,12 @@ export default function Dashboard({ supabase, session }) {
     loadPages(selectedStreamId)
   }, [selectedStreamId])
 
-  // ─── Data loading functions ───
   async function loadStreams() {
     const { data } = await supabase
       .from('streams')
       .select('*')
       .order('created_at', { ascending: true })
     setStreams(data || [])
-    if (data?.length && !selectedStreamId) {
-      setSelectedStreamId(data[0].id)
-    }
   }
 
   async function loadPages(streamId) {
@@ -135,7 +204,6 @@ export default function Dashboard({ supabase, session }) {
     }
   }
 
-  // ─── CRUD operations ───
   async function createStream(e) {
     e.preventDefault()
     if (!newStreamName.trim()) return
@@ -165,7 +233,6 @@ export default function Dashboard({ supabase, session }) {
   async function addPage(e) {
     e.preventDefault()
     if (!newPageUrl.trim()) return
-    // Clean up the URL
     let url = newPageUrl.trim()
     if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url
     const { data, error } = await supabase
@@ -209,46 +276,37 @@ export default function Dashboard({ supabase, session }) {
     }
   }
 
-  // ─── Scan logic ───
-  async function startScan() {
-    if (pages.length === 0) {
-      setScanMessage('Add some Facebook pages to this stream first.')
-      setScanStatus('error')
-      return
-    }
-
+  // ─── Generic scan logic ───
+  async function runScan(pageUrls, streamId, setStatus, setMessage, setResults) {
     const token = session?.access_token
-    setScanStatus('starting')
-    setScanMessage('Starting Apify scraper...')
-    setRisingPosts([])
+    setStatus('starting')
+    setMessage('Starting Apify scraper...')
+    setResults([])
 
     try {
-      // Step 1: Start the scan
       const startRes = await fetch('/api/scan/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          pageUrls: pages.map((p) => p.url),
-          streamId: selectedStreamId,
-        }),
+        body: JSON.stringify({ pageUrls, streamId }),
       })
 
       if (!startRes.ok) {
-        const err = await startRes.json()
-        throw new Error(err.error || 'Failed to start scan')
+        let errBody
+        try { errBody = await startRes.json() } catch { errBody = {} }
+        const msg = errBody?.userMessage || errBody?.error || 'Failed to start scan'
+        throw new Error(msg)
       }
 
       const { runId } = await startRes.json()
-      setScanStatus('scanning')
-      setScanMessage('Scanning Facebook pages... This takes 1-3 minutes.')
+      setStatus('scanning')
+      setMessage('Scanning Facebook pages... This takes 1-3 minutes.')
 
-      // Step 2: Poll for completion
       let status = 'RUNNING'
       while (status === 'RUNNING' || status === 'READY') {
-        await new Promise((r) => setTimeout(r, 5000)) // Wait 5 seconds
+        await new Promise((r) => setTimeout(r, 5000))
 
         const statusRes = await fetch(`/api/scan/status?runId=${runId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -261,12 +319,11 @@ export default function Dashboard({ supabase, session }) {
         }
       }
 
-      // Step 3: Get and process results
-      setScanStatus('processing')
-      setScanMessage('Analyzing posts for rising trends...')
+      setStatus('processing')
+      setMessage('Analyzing posts for rising trends...')
 
       const resultsRes = await fetch(
-        `/api/scan/results?runId=${runId}&streamId=${selectedStreamId}`,
+        `/api/scan/results?runId=${runId}&streamId=${streamId || ''}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -276,29 +333,44 @@ export default function Dashboard({ supabase, session }) {
       }
 
       const { posts, totalScraped } = await resultsRes.json()
-      setRisingPosts(posts)
-      setScanStatus('done')
-      setScanMessage(
+      setResults(posts)
+      setStatus('done')
+      setMessage(
         posts.length > 0
           ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'} out of ${totalScraped} scanned.`
           : `Scanned ${totalScraped} posts. No posts currently meet your rising thresholds.`
       )
     } catch (err) {
-      setScanStatus('error')
-      setScanMessage(err.message)
+      setStatus('error')
+      setMessage(err.message)
     }
   }
 
-  // ─── Derived state ───
+  async function startQuickScan(e) {
+    e?.preventDefault()
+    if (!quickUrl.trim()) return
+    let url = quickUrl.trim()
+    if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url
+    await runScan([url], null, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts)
+  }
+
+  async function startStreamScan() {
+    if (pages.length === 0) {
+      setScanMessage('Add some Facebook pages to this stream first.')
+      setScanStatus('error')
+      return
+    }
+    await runScan(pages.map((p) => p.url), selectedStreamId, setScanStatus, setScanMessage, setRisingPosts)
+  }
+
   const selectedStream = streams.find((s) => s.id === selectedStreamId)
   const isScanning = ['starting', 'scanning', 'processing'].includes(scanStatus)
+  const isQuickScanning = ['starting', 'scanning', 'processing'].includes(quickScanStatus)
 
-  // ─── Render ───
   return (
     <div className="min-h-screen flex">
       {/* ─── Sidebar ─── */}
       <div className="w-64 bg-slate-900/50 border-r border-slate-800/50 flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-slate-800/50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -308,7 +380,20 @@ export default function Dashboard({ supabase, session }) {
           </div>
         </div>
 
-        {/* Streams list */}
+        <div className="p-3 border-b border-slate-800/50">
+          <button
+            onClick={() => { setView('quick'); setSelectedStreamId(null) }}
+            className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-sm transition-colors ${
+              view === 'quick'
+                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+            }`}
+          >
+            {Icons.zap}
+            <span>Quick Scan</span>
+          </button>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Streams</span>
@@ -320,7 +405,6 @@ export default function Dashboard({ supabase, session }) {
             </button>
           </div>
 
-          {/* Add stream form */}
           {showAddStream && (
             <form onSubmit={createStream} className="mb-2">
               <input
@@ -342,7 +426,6 @@ export default function Dashboard({ supabase, session }) {
             </form>
           )}
 
-          {/* Stream items */}
           {streams.length === 0 && !showAddStream && (
             <p className="text-xs text-slate-600 mt-2">No streams yet. Create one to get started.</p>
           )}
@@ -350,11 +433,11 @@ export default function Dashboard({ supabase, session }) {
             <div
               key={stream.id}
               className={`group flex items-center justify-between px-2.5 py-2 rounded-lg mb-0.5 cursor-pointer transition-colors ${
-                selectedStreamId === stream.id
+                view === 'streams' && selectedStreamId === stream.id
                   ? 'bg-emerald-500/10 text-emerald-400'
                   : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
               }`}
-              onClick={() => setSelectedStreamId(stream.id)}
+              onClick={() => { setView('streams'); setSelectedStreamId(stream.id) }}
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="shrink-0">{Icons.stream}</span>
@@ -370,7 +453,6 @@ export default function Dashboard({ supabase, session }) {
           ))}
         </div>
 
-        {/* Bottom bar */}
         <div className="p-3 border-t border-slate-800/50 space-y-1">
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -391,7 +473,6 @@ export default function Dashboard({ supabase, session }) {
 
       {/* ─── Main Content ─── */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* Settings panel (collapsible) */}
         {showSettings && (
           <div className="bg-slate-900/70 border-b border-slate-800/50 p-5 animate-slide-up">
             <h3 className="text-sm font-semibold mb-4">Rising Post Thresholds</h3>
@@ -445,8 +526,61 @@ export default function Dashboard({ supabase, session }) {
           </div>
         )}
 
-        {/* Content area */}
-        {!selectedStream ? (
+        {/* ─── Quick Scan View ─── */}
+        {view === 'quick' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-amber-400">{Icons.zap}</span>
+                <h2 className="text-lg font-semibold">Quick Scan</h2>
+              </div>
+              <p className="text-xs text-slate-500 mb-5">Paste a Facebook page URL and scan it instantly. No stream needed.</p>
+
+              <form onSubmit={startQuickScan} className="flex gap-2 items-end mb-5">
+                <div className="flex-1 max-w-lg">
+                  <input
+                    type="text"
+                    value={quickUrl}
+                    onChange={(e) => setQuickUrl(e.target.value)}
+                    placeholder="https://facebook.com/PageName or just PageName"
+                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/25 transition-colors"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isQuickScanning || !quickUrl.trim()}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    isQuickScanning
+                      ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 cursor-not-allowed animate-pulse-glow'
+                      : !quickUrl.trim()
+                      ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white'
+                  }`}
+                >
+                  {Icons.scan}
+                  {isQuickScanning ? 'Scanning...' : 'Scan'}
+                </button>
+              </form>
+
+              {quickScanMessage && (
+                <p className={`text-xs mb-4 ${quickScanStatus === 'error' ? 'text-red-400' : quickScanStatus === 'done' ? 'text-slate-400' : 'text-amber-400/70'}`}>
+                  {quickScanMessage}
+                </p>
+              )}
+
+              <RisingPostsList posts={quickRisingPosts} />
+
+              {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
+                <div className="bg-slate-900/30 border border-slate-800/30 rounded-xl p-8 text-center">
+                  <p className="text-sm text-slate-500">No rising posts found. Try lowering your thresholds in Settings or scanning again later.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Streams View ─── */}
+        {view === 'streams' && !selectedStream && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <div className="w-16 h-16 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-center mx-auto mb-4 text-slate-600">
@@ -457,13 +591,13 @@ export default function Dashboard({ supabase, session }) {
               </p>
             </div>
           </div>
-        ) : (
+        )}
+
+        {view === 'streams' && selectedStream && (
           <div className="flex-1 overflow-y-auto">
-            {/* Stream header + page management */}
             <div className="p-5 pb-0">
               <h2 className="text-lg font-semibold mb-4">{selectedStream.name}</h2>
 
-              {/* Pages in this stream */}
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
@@ -490,7 +624,6 @@ export default function Dashboard({ supabase, session }) {
                   </div>
                 )}
 
-                {/* Add page form */}
                 <form onSubmit={addPage} className="flex gap-2 items-end">
                   <div className="flex-1 max-w-sm">
                     <input
@@ -519,10 +652,9 @@ export default function Dashboard({ supabase, session }) {
                 </form>
               </div>
 
-              {/* Scan button */}
               <div className="flex items-center gap-3 mb-5 pt-3 border-t border-slate-800/30">
                 <button
-                  onClick={startScan}
+                  onClick={startStreamScan}
                   disabled={isScanning || pages.length === 0}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                     isScanning
@@ -543,76 +675,12 @@ export default function Dashboard({ supabase, session }) {
               </div>
             </div>
 
-            {/* Rising posts results */}
             {risingPosts.length > 0 && (
               <div className="px-5 pb-5">
-                <div className="space-y-3">
-                  {risingPosts.map((post, i) => (
-                    <div
-                      key={post.post_id || i}
-                      className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 animate-slide-up"
-                      style={{ animationDelay: `${i * 50}ms` }}
-                    >
-                      {/* Post header */}
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="min-w-0">
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                            {post.page_name || 'Unknown Page'}
-                          </span>
-                          {post.posted_at && (
-                            <span className="text-[10px] text-slate-600 ml-2">
-                              {timeAgo(post.posted_at)}
-                            </span>
-                          )}
-                        </div>
-                        {post.post_url && (
-                          <a
-                            href={post.post_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 text-slate-600 hover:text-emerald-400 transition-colors"
-                          >
-                            {Icons.link}
-                          </a>
-                        )}
-                      </div>
-
-                      {/* Post content preview */}
-                      {post.content_preview && (
-                        <p className="text-sm text-slate-300 mb-3 line-clamp-3 leading-relaxed">
-                          {post.content_preview}
-                        </p>
-                      )}
-
-                      {/* Metrics */}
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-500">Total</span>
-                          <span className="font-semibold text-slate-200">{formatNumber(post.total_interactions)}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-500">Velocity</span>
-                          <span className="font-semibold text-emerald-400">{post.velocity?.toFixed(0)}/hr</span>
-                        </div>
-                        {post.delta !== null && post.delta !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500">Delta</span>
-                            <span className="font-semibold text-emerald-400">+{post.delta}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-3 ml-auto text-slate-600">
-                          <span>👍 {formatNumber(post.reactions)}</span>
-                          <span>💬 {formatNumber(post.comments)}</span>
-                          <span>🔄 {formatNumber(post.shares)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <RisingPostsList posts={risingPosts} />
               </div>
             )}
 
-            {/* Empty state after scan */}
             {scanStatus === 'done' && risingPosts.length === 0 && (
               <div className="px-5 pb-5">
                 <div className="bg-slate-900/30 border border-slate-800/30 rounded-xl p-8 text-center">
