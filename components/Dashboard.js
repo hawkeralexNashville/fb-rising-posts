@@ -10,6 +10,70 @@ const PLATFORMS = {
   reddit: { label: 'Reddit', color: 'text-orange-600 bg-orange-50 border-orange-200', icon: '🔴', placeholder: 'r/subreddit or https://reddit.com/r/subreddit', urlPrefix: 'https://www.reddit.com/r/' },
 }
 
+// ─── Category Filters ───
+const CATEGORIES = {
+  none: { label: 'No Filter', icon: '—', keywords: [] },
+  finance: { label: 'Finance & Economics', icon: '💰', keywords: [
+    'stock', 'market', 'wall street', 's&p', 'dow', 'nasdaq', 'nyse', 'earning', 'revenue', 'profit', 'gdp',
+    'inflation', 'recession', 'interest rate', 'fed ', 'federal reserve', 'central bank', 'treasury', 'bond',
+    'yield', 'ipo', 'invest', 'dividend', 'portfolio', 'bull ', 'bear ', 'trading', 'hedge fund', 'mutual fund',
+    'etf', 'commodity', 'oil price', 'gold price', 'crypto', 'bitcoin', 'banking', 'jpmorgan', 'goldman',
+    'fiscal', 'monetary', 'tariff', 'trade war', 'debt ceiling', 'deficit', 'surplus', 'unemploy', 'jobs report',
+    'payroll', 'cpi', 'housing market', 'mortgage', 'credit', 'loan', 'currency', 'forex', 'dollar', 'euro',
+    'yen', 'financi', 'econom', 'wall st', 'quarter', 'revenue', 'shareholder', 'valuation', 'startup fund',
+    'venture capital', 'private equity', 'wealth', 'pension', 'retail investor', 'sec ', 'securities',
+    'dow jones', 'rate cut', 'rate hike', 'quantitative', 'stimulus', 'bailout', 'default', 'credit rating',
+    'moody', 'fitch', 'bank of america', 'citigroup', 'wells fargo', 'morgan stanley', 'blackrock',
+  ]},
+  politics: { label: 'Politics & Policy', icon: '🏛️', keywords: [
+    'president', 'congress', 'senate', 'house of rep', 'white house', 'legislation', 'bill sign', 'executive order',
+    'election', 'vote', 'campaign', 'democrat', 'republican', 'gop', 'bipartisan', 'impeach', 'supreme court',
+    'governor', 'mayor', 'policy', 'regulat', 'sanction', 'foreign policy', 'nato', ' un ', 'diplomacy',
+    'immigra', 'border', 'abortion', 'gun control', 'amendment', 'federal government', 'state government',
+    'political', 'party', 'cabinet', 'attorney general', 'speaker of', 'filibuster', 'veto', 'partisan',
+    'primary', 'ballot', 'swing state', 'electoral', 'lobby', 'caucus', 'geopolit',
+  ]},
+  tech: { label: 'Tech & AI', icon: '🤖', keywords: [
+    ' ai ', 'artificial intelligence', 'chatgpt', 'openai', 'google', 'apple', 'microsoft', 'amazon', 'meta',
+    'tesla', 'nvidia', 'startup', 'silicon valley', 'software', ' app ', 'data breach', 'cybersecur', 'robot',
+    'automat', 'machine learning', 'chip', 'semiconductor', 'cloud computing', 'blockchain', 'tiktok',
+    'social media', 'streaming', 'tech layoff', 'algorithm', 'quantum', 'virtual reality', 'augmented reality',
+    'saas', 'platform', 'developer', 'open source', 'neural', 'deep learning', 'large language model', 'llm',
+  ]},
+  entertainment: { label: 'Entertainment', icon: '🎬', keywords: [
+    'movie', 'film', 'tv show', 'series', 'netflix', 'actor', 'actress', 'celebrity', 'grammy', 'oscar', 'emmy',
+    'album', 'concert', 'tour', 'box office', 'hollywood', 'music', 'singer', 'rapper', 'viral', 'reality tv',
+    'podcast', 'disney', 'hulu', 'hbo', 'broadway', 'comedian', 'stand-up', 'award', 'premiere', 'sequel',
+    'soundtrack', 'entertain', 'perform', 'ticket', 'festival',
+  ]},
+  sports: { label: 'Sports', icon: '🏈', keywords: [
+    'nfl', 'nba', 'mlb', 'nhl', 'super bowl', 'world series', 'playoff', 'championship', 'coach', 'draft',
+    'trade', 'free agent', 'touchdown', 'home run', 'goal', ' mvp', 'injury', 'roster', 'stadium', 'ncaa',
+    'college football', 'march madness', 'quarterback', 'pitcher', 'soccer', 'premier league', 'champions league',
+    'tennis', 'golf', 'olympic', 'ufc', 'boxing', 'athlete', 'season', 'game day', 'halftime',
+  ]},
+  crime: { label: 'Crime & Justice', icon: '⚖️', keywords: [
+    'arrest', 'charged', 'convicted', 'sentenced', 'murder', 'shooting', 'robbery', 'fraud', 'lawsuit', 'trial',
+    'jury', 'verdict', 'prison', 'indictment', ' fbi', ' doj', 'police', 'investigation', 'crime', 'homicide',
+    'suspect', 'victim', 'felony', 'misdemeanor', 'parole', 'prosecutor', 'defense attorney', 'witness',
+    'manslaughter', 'assault', 'trafficking', 'cartel', 'organized crime',
+  ]},
+  health: { label: 'Health & Science', icon: '🧬', keywords: [
+    'vaccine', 'pandemic', 'disease', ' fda', ' cdc', 'study finds', 'clinical trial', 'cancer', 'treatment',
+    'drug', 'pharmaceut', 'hospital', 'doctor', 'mental health', 'outbreak', 'virus', 'surgery', 'diagnosis',
+    'research', 'health', 'medical', 'patient', 'therapy', 'symptom', 'prescription', 'biotech', 'gene',
+    'stem cell', 'public health', 'wellness', 'nutrition', 'obesity', 'diabetes',
+  ]},
+}
+
+function postMatchesCategory(post, categoryKey) {
+  if (!categoryKey || categoryKey === 'none') return true
+  const cat = CATEGORIES[categoryKey]
+  if (!cat || cat.keywords.length === 0) return true
+  const text = ((post.content_preview || '') + ' ' + (post.page_name || '')).toLowerCase()
+  return cat.keywords.some(kw => text.includes(kw.trim()))
+}
+
 // ─── Icons ───
 const Icons = {
   plus: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
@@ -206,6 +270,7 @@ export default function Dashboard({ supabase, session }) {
   const [showAddStream, setShowAddStream] = useState(false)
   const [showPages, setShowPages] = useState(false)
   const [showAddPage, setShowAddPage] = useState(false)
+  const [categoryFilterOn, setCategoryFilterOn] = useState(false)
   const [timeWindow, setTimeWindow] = useState(6)
   const [minInteractions, setMinInteractions] = useState(50)
   const [maxInteractions, setMaxInteractions] = useState(0)
@@ -253,7 +318,7 @@ export default function Dashboard({ supabase, session }) {
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedStreamId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
   useEffect(() => {
@@ -289,6 +354,10 @@ export default function Dashboard({ supabase, session }) {
     const displayName = session?.user?.email?.split('@')[0] || 'Anonymous'
     const { error } = await supabase.from('streams').update({ is_public: isPublic, creator_name: isPublic ? displayName : null }).eq('id', streamId)
     if (!error) { setStreams(streams.map(s => s.id === streamId ? { ...s, is_public: isPublic, creator_name: isPublic ? displayName : null } : s)); loadPublicStreams() }
+  }
+  async function updateStreamCategory(streamId, category) {
+    const { error } = await supabase.from('streams').update({ category }).eq('id', streamId)
+    if (!error) { setStreams(streams.map(s => s.id === streamId ? { ...s, category } : s)); if (category && category !== 'none') setCategoryFilterOn(true) }
   }
   async function selectPublicStream(stream) {
     if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null); setShowPublicPages(false)
@@ -808,16 +877,26 @@ export default function Dashboard({ supabase, session }) {
         )}
 
         {/* ─── Stream Detail ─── */}
-        {view === 'streams' && selectedStream && (
+        {view === 'streams' && selectedStream && (() => {
+          const streamCategory = selectedStream.category || 'none'
+          const filteredPosts = categoryFilterOn && streamCategory !== 'none' ? risingPosts.filter(p => postMatchesCategory(p, streamCategory)) : risingPosts
+          const hiddenCount = risingPosts.length - filteredPosts.length
+          return (
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-xl font-bold text-slate-900">{selectedStream.name}</h2>
-                <button onClick={() => toggleStreamPublic(selectedStream.id, !selectedStream.is_public)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${selectedStream.is_public ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'}`}>
-                  {Icons.globe}
-                  {selectedStream.is_public ? 'Public' : 'Make Public'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <select value={streamCategory} onChange={(e) => updateStreamCategory(selectedStream.id, e.target.value)}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-600 focus:outline-none focus:border-orange-400 cursor-pointer">
+                    {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                  </select>
+                  <button onClick={() => toggleStreamPublic(selectedStream.id, !selectedStream.is_public)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${selectedStream.is_public ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300'}`}>
+                    {Icons.globe}
+                    {selectedStream.is_public ? 'Public' : 'Make Public'}
+                  </button>
+                </div>
               </div>
 
               {/* Compact pages bar */}
@@ -892,13 +971,36 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
-              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
+
+              {/* Category filter toggle */}
+              {risingPosts.length > 0 && streamCategory !== 'none' && (
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{CATEGORIES[streamCategory]?.icon}</span>
+                    <span className="text-sm font-medium text-slate-700">{CATEGORIES[streamCategory]?.label} filter</span>
+                    {categoryFilterOn && hiddenCount > 0 && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{hiddenCount} hidden</span>}
+                  </div>
+                  <button onClick={() => setCategoryFilterOn(!categoryFilterOn)}
+                    className={`relative w-10 h-6 rounded-full transition-colors ${categoryFilterOn ? 'bg-orange-500' : 'bg-slate-200'}`}>
+                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${categoryFilterOn ? 'left-5' : 'left-1'}`} />
+                  </button>
+                </div>
+              )}
+
+              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} />}
+              {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+                  <p className="text-base text-slate-400">All {risingPosts.length} rising posts were filtered out by the {CATEGORIES[streamCategory]?.label} filter.</p>
+                  <button onClick={() => setCategoryFilterOn(false)} className="mt-3 text-sm text-orange-500 hover:text-orange-600 font-medium">Turn off filter to see all posts</button>
+                </div>
+              )}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ─── Public Stream View ─── */}
         {view === 'public' && selectedPublicStream && (
