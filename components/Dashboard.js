@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Account from './Account'
 import Admin from './Admin'
+import Admin from './Admin'
 
 // ─── Platform Config ───
 const PLATFORMS = {
