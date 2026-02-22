@@ -15,7 +15,16 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
     setError(null)
     setMessage(null)
 
-    if (mode === 'signup') {
+    if (mode === 'forgot') {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}`,
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage('Password reset link sent! Check your email.')
+      }
+    } else if (mode === 'signup') {
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) {
         setError(error.message)
@@ -54,10 +63,10 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
               </svg>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {mode === 'login' ? 'Welcome back' : 'Create your account'}
+              {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Reset your password'}
             </h1>
             <p className="text-slate-500 mt-2 text-base">
-              {mode === 'login' ? 'Sign in to your Rising Posts account' : 'Start finding trending content today'}
+              {mode === 'login' ? 'Sign in to your Rising Posts account' : mode === 'signup' ? 'Start finding trending content today' : 'Enter your email and we\'ll send you a reset link'}
             </p>
           </div>
 
@@ -74,18 +83,31 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
                 placeholder="you@email.com"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all"
-                placeholder="••••••••"
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  {mode === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => { setMode('forgot'); setError(null); setMessage(null) }}
+                      className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
 
             {error && (
               <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>
@@ -99,19 +121,30 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
               disabled={loading}
               className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-base font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:shadow-md"
             >
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
             </button>
           </form>
 
           {/* Toggle mode */}
           <p className="text-center text-sm text-slate-500 mt-6">
-            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <button
-              onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setMessage(null) }}
-              className="text-orange-500 hover:text-orange-600 font-medium transition-colors"
-            >
-              {mode === 'login' ? 'Sign up' : 'Sign in'}
-            </button>
+            {mode === 'login' && (
+              <>
+                Don&apos;t have an account?{' '}
+                <button onClick={() => { setMode('signup'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Sign up</button>
+              </>
+            )}
+            {mode === 'signup' && (
+              <>
+                Already have an account?{' '}
+                <button onClick={() => { setMode('login'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Sign in</button>
+              </>
+            )}
+            {mode === 'forgot' && (
+              <>
+                Remember your password?{' '}
+                <button onClick={() => { setMode('login'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Sign in</button>
+              </>
+            )}
           </p>
         </div>
       </div>
