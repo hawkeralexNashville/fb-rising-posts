@@ -161,20 +161,29 @@ export async function GET(request) {
 
       let isRising = false
       let reason = ''
+      const fmtAge = ageHours !== null ? (ageHours < 1 ? Math.round(ageHours * 60) + ' minutes' : ageHours < 2 ? '1 hour' : Math.round(ageHours) + ' hours') : null
+      const fmtInt = (n) => n.toLocaleString()
+
       if (prev && delta !== null) { 
         isRising = delta >= settings.min_delta
         if (isRising) {
           const timeSinceLast = prev.scraped_at ? Math.round((nowMs - new Date(prev.scraped_at).getTime()) / 60000) : null
-          reason = `Gained ${delta.toLocaleString()} interactions since last scan${timeSinceLast ? ` (${timeSinceLast < 60 ? timeSinceLast + 'm' : Math.round(timeSinceLast / 60) + 'h'} ago)` : ''}`
+          const timeSinceStr = timeSinceLast ? (timeSinceLast < 60 ? `${timeSinceLast} minutes` : `${Math.round(timeSinceLast / 60)} hours`) : null
+          const deltaRate = timeSinceLast && timeSinceLast > 0 ? Math.round(delta / (timeSinceLast / 60)) : null
+          reason = `This post had ${fmtInt(prev.total_interactions)} interactions when we last scanned${timeSinceStr ? ` ${timeSinceStr} ago` : ''} and now has ${fmtInt(post.total_interactions)} — that's a jump of +${fmtInt(delta)}${deltaRate ? ` (roughly ${fmtInt(deltaRate)}/hr)` : ''}. Your threshold is ${settings.min_delta}+ growth between scans, so this qualifies as a fast riser.`
         }
       }
       else if (velocity !== null) { 
         isRising = velocity >= settings.min_velocity
-        if (isRising) reason = `Averaging ${Math.round(velocity).toLocaleString()} interactions/hr over ${ageHours < 1 ? Math.round(ageHours * 60) + ' minutes' : Math.round(ageHours) + ' hours'}`
+        if (isRising) {
+          const velRound = Math.round(velocity)
+          const multiplier = Math.round(velocity / settings.min_velocity * 10) / 10
+          reason = `Posted ${fmtAge} ago with ${fmtInt(post.total_interactions)} total interactions, giving it a velocity of ${fmtInt(velRound)} interactions per hour. That's ${multiplier > 1.5 ? multiplier + 'x' : 'above'} your minimum velocity threshold of ${settings.min_velocity}/hr — this is picking up traction fast for its age.`
+        }
       }
       else { 
         isRising = post.total_interactions >= settings.min_velocity * 2
-        if (isRising) reason = `${post.total_interactions.toLocaleString()} interactions with no timestamp — flagged for high volume`
+        if (isRising) reason = `This post has ${fmtInt(post.total_interactions)} interactions but no timestamp available, so we can't calculate velocity. It exceeds the high-volume threshold of ${fmtInt(settings.min_velocity * 2)} interactions, so it's flagged as potentially rising.`
       }
 
       if (!isRising) { filteredOut++; continue }
