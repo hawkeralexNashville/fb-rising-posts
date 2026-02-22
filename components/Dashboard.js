@@ -183,18 +183,11 @@ function RisingPostsList({ posts }) {
 }
 
 // ─── Scan Summary + Save ───
-function ScanSummary({ status, message, postCount, totalScraped, filteredOut, onSave, saveable }) {
+function ScanSummary({ status, message, postCount, totalScraped, filteredOut }) {
   if (!message) return null
   return (
     <div className="mb-5">
-      <div className="flex items-center gap-3">
-        <p className={`text-sm ${status === 'error' ? 'text-red-500' : status === 'done' ? 'text-slate-500' : 'text-orange-500'}`}>{message}</p>
-        {saveable && status === 'done' && postCount > 0 && (
-          <button onClick={onSave} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 transition-colors">
-            {Icons.save} Save Scan
-          </button>
-        )}
-      </div>
+      <p className={`text-sm ${status === 'error' ? 'text-red-500' : status === 'done' ? 'text-slate-500' : 'text-orange-500'}`}>{message}</p>
       {status === 'done' && totalScraped > 0 && (
         <p className="text-xs text-slate-400 mt-1">{totalScraped} scraped → {filteredOut} filtered → {postCount} rising</p>
       )}
@@ -266,18 +259,18 @@ export default function Dashboard({ supabase, session }) {
   }
 
   async function saveScanResults(posts, stats, streamId, source) {
+    if (!posts || posts.length === 0) return
     const streamName = streamId ? streams.find(s => s.id === streamId)?.name : null
     const now = new Date()
     const timeLabel = TIME_OPTIONS.find(t => t.value === timeWindow)?.label || `${timeWindow}h`
-    const autoName = `${streamName || source || 'Quick Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-    const name = prompt('Name this scan:', autoName); if (!name) return
-    const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name: name.trim(), time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
+    const name = `${streamName || source || 'Quick Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]) }
   }
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { setSelectedSavedScan(data); setView('saved') } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
-  async function runScan(pageUrls, streamId, setStatus, setMessage, setResults, setStats) {
+  async function runScan(pageUrls, streamId, setStatus, setMessage, setResults, setStats, source) {
     const token = session?.access_token; setStatus('starting'); setMessage('Starting Apify scraper...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0 })
     try {
       const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow }) })
@@ -291,11 +284,13 @@ export default function Dashboard({ supabase, session }) {
       if (!resultsRes.ok) { const err = await resultsRes.json(); throw new Error(err.error || 'Failed to process results') }
       const { posts, totalScraped, filteredOut } = await resultsRes.json(); setResults(posts); setStats({ totalScraped, filteredOut }); setStatus('done')
       setMessage(posts.length > 0 ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+      // Auto-save
+      if (posts.length > 0) saveScanResults(posts, { totalScraped, filteredOut }, streamId, source)
     } catch (err) { setStatus('error'); setMessage(err.message) }
   }
 
-  async function startQuickScan(e) { e?.preventDefault(); if (!quickUrl.trim()) return; let url = quickUrl.trim(); if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url; await runScan([url], null, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats) }
-  async function startStreamScan() { if (pages.length === 0) { setScanMessage('Add some Facebook pages first.'); setScanStatus('error'); return }; await runScan(pages.map((p) => p.url), selectedStreamId, setScanStatus, setScanMessage, setRisingPosts, setScanStats) }
+  async function startQuickScan(e) { e?.preventDefault(); if (!quickUrl.trim()) return; let url = quickUrl.trim(); if (!url.startsWith('http')) url = 'https://www.facebook.com/' + url; await runScan([url], null, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats, url) }
+  async function startStreamScan() { if (pages.length === 0) { setScanMessage('Add some Facebook pages first.'); setScanStatus('error'); return }; await runScan(pages.map((p) => p.url), selectedStreamId, setScanStatus, setScanMessage, setRisingPosts, setScanStats, null) }
 
   const selectedStream = streams.find((s) => s.id === selectedStreamId)
   const isScanning = ['starting', 'scanning', 'processing'].includes(scanStatus)
@@ -415,7 +410,7 @@ export default function Dashboard({ supabase, session }) {
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} />
               </form>
 
-              <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} saveable={true} onSave={() => saveScanResults(quickRisingPosts, quickScanStats, null, quickUrl.trim())} />
+              <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} />
               {isQuickScanning && <ScanningAnimation />}
               <RisingPostsList posts={quickRisingPosts} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
@@ -484,7 +479,7 @@ export default function Dashboard({ supabase, session }) {
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} />
               </div>
 
-              <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} saveable={true} onSave={() => saveScanResults(risingPosts, scanStats, selectedStreamId)} />
+              <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} />
               {isScanning && <ScanningAnimation />}
               {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
