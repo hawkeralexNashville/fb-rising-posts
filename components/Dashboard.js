@@ -228,12 +228,14 @@ export default function Dashboard({ supabase, session }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
   const abortRef = useRef(false)
+  const activeScanRef = useRef(null)
+  const [bgScanRunning, setBgScanRunning] = useState(null)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedStreamId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedStreamId])
 
   useEffect(() => {
     if (pendingRerun && pages.length > 0 && view === 'streams') {
@@ -253,7 +255,7 @@ export default function Dashboard({ supabase, session }) {
     if (!error) { setStreams(streams.map(s => s.id === streamId ? { ...s, is_public: isPublic, creator_name: isPublic ? displayName : null } : s)); loadPublicStreams() }
   }
   async function selectPublicStream(stream) {
-    setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null)
+    if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedPublicStream(stream); setView('public'); setSelectedStreamId(null); setSelectedSavedScan(null)
     const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', stream.id).order('created_at', { ascending: true })
     setPublicPages(data || [])
   }
@@ -261,10 +263,10 @@ export default function Dashboard({ supabase, session }) {
 
   async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
   async function deleteStream(id) { if (!confirm('Delete this stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id)); if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) } }
-  function showToast(msg, type = 'success') {
+  function showToast(msg, type = 'success', duration = 2500) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 2500)
+    toastTimer.current = setTimeout(() => setToast(null), duration)
   }
 
   async function addPage(e) {
@@ -290,7 +292,7 @@ export default function Dashboard({ supabase, session }) {
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]) }
   }
-  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { setSelectedSavedScan(data); setView('saved') } }
+  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved') } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
   async function rerunSavedScan(scan) {
@@ -345,22 +347,28 @@ export default function Dashboard({ supabase, session }) {
 
   async function runScan(pageUrls, streamId, platform, setStatus, setMessage, setResults, setStats, source) {
     abortRef.current = false
-    const token = session?.access_token; setStatus('starting'); setMessage('Starting scan...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
+    const scanId = Date.now()
+    const scanLabel = source || streams.find(s => s.id === streamId)?.name || 'Quick Scan'
+    activeScanRef.current = { id: scanId, label: scanLabel }
+    const fg = () => activeScanRef.current?.id === scanId
+
+    const token = session?.access_token
+    setStatus('starting'); setMessage('Starting scan...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
     try {
       const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow, platform }) })
       if (!startRes.ok) { let errBody; try { errBody = await startRes.json() } catch { errBody = {} }; throw new Error(errBody?.userMessage || errBody?.error || 'Failed to start scan') }
-      const { runId } = await startRes.json(); setStatus('scanning'); setMessage('Scanning...')
+      const { runId } = await startRes.json()
+      if (fg()) { setStatus('scanning'); setMessage('Scanning...') }
 
       let status = 'RUNNING'
       let costUsd = null
       while (status === 'RUNNING' || status === 'READY') {
-        if (abortRef.current) {
-          // Try to abort the Apify run
+        if (abortRef.current && fg()) {
           try { await fetch(`/api/scan/status?runId=${runId}&abort=true`, { headers: { Authorization: `Bearer ${token}` } }) } catch {}
-          setStatus('idle'); setMessage('Scan stopped.'); return
+          setStatus('idle'); setMessage('Scan stopped.'); activeScanRef.current = null; return
         }
         await new Promise((r) => setTimeout(r, 5000))
-        if (abortRef.current) { setStatus('idle'); setMessage('Scan stopped.'); return }
+        if (abortRef.current && fg()) { setStatus('idle'); setMessage('Scan stopped.'); activeScanRef.current = null; return }
         const statusRes = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } })
         const statusData = await statusRes.json()
         status = statusData.status
@@ -368,44 +376,56 @@ export default function Dashboard({ supabase, session }) {
         if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Scan ${status.toLowerCase()}. Try again.`)
       }
 
-      if (abortRef.current) { setStatus('idle'); setMessage('Scan stopped.'); return }
-      setStatus('processing'); setMessage('Analyzing posts...')
+      if (fg()) { setStatus('processing'); setMessage('Analyzing posts...') }
       const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
       const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${streamId || ''}&platform=${platform}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!resultsRes.ok) { const err = await resultsRes.json(); throw new Error(err.error || 'Failed to process results') }
 
       const { posts, totalScraped, filteredOut, costUsd: finalCost } = await resultsRes.json()
       const cost = finalCost ?? costUsd
-      setResults(posts); setStats({ totalScraped, filteredOut, costUsd: cost }); setStatus('done')
-      setMessage(posts.length > 0 ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+
+      if (fg()) {
+        setResults(posts); setStats({ totalScraped, filteredOut, costUsd: cost }); setStatus('done')
+        setMessage(posts.length > 0 ? `Found ${posts.length} rising post${posts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+      } else {
+        showToast(`${scanLabel} — ${posts.length} rising post${posts.length === 1 ? '' : 's'} found`, 'success', 5000)
+        setBgScanRunning(null)
+      }
       if (posts.length > 0) saveScanResults(posts, { totalScraped, filteredOut, costUsd: cost }, streamId, source)
-    } catch (err) { setStatus('error'); setMessage(err.message) }
+      if (fg()) activeScanRef.current = null
+    } catch (err) {
+      if (fg()) { setStatus('error'); setMessage(err.message); activeScanRef.current = null }
+      else { showToast(`${scanLabel} scan failed`, 'error', 5000); setBgScanRunning(null) }
+    }
   }
 
   async function startQuickScan(e) { e?.preventDefault(); if (!quickUrl.trim()) return; let url = quickUrl.trim(); if (!url.startsWith('http')) url = PLATFORMS[quickPlatform].urlPrefix + url.replace(/^[@r\/]+/, ''); await runScan([url], null, quickPlatform, setQuickScanStatus, setQuickScanMessage, setQuickRisingPosts, setQuickScanStats, url) }
 
   async function startStreamScan() {
     if (pages.length === 0) { setScanMessage('Add some pages first.'); setScanStatus('error'); return }
-    // Group pages by platform and run scans
     const platforms = [...new Set(pages.map(p => p.platform || 'facebook'))]
     if (platforms.length === 1) {
       await runScan(pages.map(p => p.url), selectedStreamId, platforms[0], setScanStatus, setScanMessage, setRisingPosts, setScanStats, null)
     } else {
-      // Multi-platform stream: scan each platform separately and merge
+      const scanId = Date.now()
+      const scanLabel = streams.find(s => s.id === selectedStreamId)?.name || 'Stream'
+      activeScanRef.current = { id: scanId, label: scanLabel }
+      const fg = () => activeScanRef.current?.id === scanId
+
       setScanStatus('starting'); setScanMessage('Starting multi-platform scan...'); setRisingPosts([]); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
       let allPosts = []; let totalScraped = 0; let totalFiltered = 0; let totalCost = 0
       try {
         for (const plat of platforms) {
           const platPages = pages.filter(p => (p.platform || 'facebook') === plat)
-          setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
+          if (fg()) setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
           const token = session?.access_token
           const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: platPages.map(p => p.url), streamId: selectedStreamId, timeWindowHours: timeWindow, platform: plat }) })
           if (!startRes.ok) { const err = await startRes.json(); throw new Error(err?.userMessage || err?.error || `Failed to start ${plat} scan`) }
           const { runId } = await startRes.json()
-          setScanStatus('scanning')
+          if (fg()) setScanStatus('scanning')
           let status = 'RUNNING'
           while (status === 'RUNNING' || status === 'READY') { await new Promise(r => setTimeout(r, 5000)); const s = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } }); const sd = await s.json(); status = sd.status; if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`${plat} scan ${status.toLowerCase()}.`) }
-          setScanStatus('processing')
+          if (fg()) setScanStatus('processing')
           const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
           const resultsRes = await fetch(`/api/scan/results?runId=${runId}&streamId=${selectedStreamId}&platform=${plat}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
           if (!resultsRes.ok) continue
@@ -413,10 +433,19 @@ export default function Dashboard({ supabase, session }) {
           allPosts = [...allPosts, ...posts]; totalScraped += ts; totalFiltered += fo; totalCost += (costUsd || 0)
         }
         allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
-        setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
-        setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} across ${platforms.length} platforms.` : `No posts meet your current filters.`)
+        if (fg()) {
+          setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
+          setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} across ${platforms.length} platforms.` : `No posts meet your current filters.`)
+        } else {
+          showToast(`${scanLabel} — ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} found`, 'success', 5000)
+          setBgScanRunning(null)
+        }
         if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered, costUsd: totalCost }, selectedStreamId, null)
-      } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
+        if (fg()) activeScanRef.current = null
+      } catch (err) {
+        if (fg()) { setScanStatus('error'); setScanMessage(err.message); activeScanRef.current = null }
+        else { showToast(`${scanLabel} scan failed`, 'error', 5000); setBgScanRunning(null) }
+      }
     }
   }
 
@@ -430,20 +459,25 @@ export default function Dashboard({ supabase, session }) {
     if (platforms.length === 1) {
       await runScan(publicPages.map(p => p.url), null, platforms[0], setScanStatus, setScanMessage, setRisingPosts, setScanStats, selectedPublicStream?.name)
     } else {
+      const scanId = Date.now()
+      const scanLabel = selectedPublicStream?.name || 'Public stream'
+      activeScanRef.current = { id: scanId, label: scanLabel }
+      const fg = () => activeScanRef.current?.id === scanId
+
       setScanStatus('starting'); setScanMessage('Starting multi-platform scan...'); setRisingPosts([]); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
       let allPosts = []; let totalScraped = 0; let totalFiltered = 0; let totalCost = 0
       try {
         for (const plat of platforms) {
           const platPages = publicPages.filter(p => (p.platform || 'facebook') === plat)
-          setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
+          if (fg()) setScanMessage(`Scanning ${PLATFORMS[plat].label} pages...`)
           const token = session?.access_token
           const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: platPages.map(p => p.url), timeWindowHours: timeWindow, platform: plat }) })
           if (!startRes.ok) { const err = await startRes.json(); throw new Error(err?.userMessage || err?.error || `Failed to start ${plat} scan`) }
           const { runId } = await startRes.json()
-          setScanStatus('scanning')
+          if (fg()) setScanStatus('scanning')
           let status = 'RUNNING'
           while (status === 'RUNNING' || status === 'READY') { await new Promise(r => setTimeout(r, 5000)); const s = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } }); const sd = await s.json(); status = sd.status; if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`${plat} scan ${status.toLowerCase()}.`) }
-          setScanStatus('processing')
+          if (fg()) setScanStatus('processing')
           const maxInt = maxInteractions > 0 ? maxInteractions : 999999999
           const resultsRes = await fetch(`/api/scan/results?runId=${runId}&platform=${plat}&timeWindowHours=${timeWindow}&minInteractions=${minInteractions}&maxInteractions=${maxInt}`, { headers: { Authorization: `Bearer ${token}` } })
           if (!resultsRes.ok) continue
@@ -451,10 +485,19 @@ export default function Dashboard({ supabase, session }) {
           allPosts = [...allPosts, ...posts]; totalScraped += ts; totalFiltered += fo; totalCost += (costUsd || 0)
         }
         allPosts.sort((a, b) => ((b.velocity || 0) + (b.delta || 0) * 2) - ((a.velocity || 0) + (a.delta || 0) * 2))
-        setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
-        setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+        if (fg()) {
+          setRisingPosts(allPosts); setScanStats({ totalScraped, filteredOut: totalFiltered, costUsd: totalCost || null }); setScanStatus('done')
+          setScanMessage(allPosts.length > 0 ? `Found ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'}.` : `No posts meet your current filters.`)
+        } else {
+          showToast(`${scanLabel} — ${allPosts.length} rising post${allPosts.length === 1 ? '' : 's'} found`, 'success', 5000)
+          setBgScanRunning(null)
+        }
         if (allPosts.length > 0) saveScanResults(allPosts, { totalScraped, filteredOut: totalFiltered, costUsd: totalCost }, null, selectedPublicStream?.name)
-      } catch (err) { setScanStatus('error'); setScanMessage(err.message) }
+        if (fg()) activeScanRef.current = null
+      } catch (err) {
+        if (fg()) { setScanStatus('error'); setScanMessage(err.message); activeScanRef.current = null }
+        else { showToast(`${scanLabel} scan failed`, 'error', 5000); setBgScanRunning(null) }
+      }
     }
   }
 
@@ -475,7 +518,7 @@ export default function Dashboard({ supabase, session }) {
         </div>
 
         <div className="p-3 border-b border-slate-100">
-          <button onClick={() => { setView('quick'); setSelectedStreamId(null); setSelectedSavedScan(null) }}
+          <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('quick'); setSelectedStreamId(null); setSelectedSavedScan(null) }}
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${view === 'quick' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>
             {Icons.zap}<span>Quick Scan</span>
           </button>
@@ -530,14 +573,20 @@ export default function Dashboard({ supabase, session }) {
         </div>
 
         <div className="shrink-0 p-3 border-t border-slate-100 flex flex-col gap-1">
+          {bgScanRunning && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-1 bg-orange-50 border border-orange-200 rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shrink-0" />
+              <span className="text-xs text-orange-600 font-medium truncate">{bgScanRunning} scanning…</span>
+            </div>
+          )}
           {isAdmin && (
-            <button onClick={() => { setView('admin'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+            <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('admin'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
               className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'admin' ? 'bg-orange-50 text-orange-600 font-medium border border-orange-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
               <span>Admin</span>
             </button>
           )}
-          <button onClick={() => { setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+          <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('account'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-sm rounded-xl transition-colors ${view === 'account' ? 'bg-slate-100 text-slate-700 font-medium' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
             {Icons.user}<span>Account</span>
           </button>
