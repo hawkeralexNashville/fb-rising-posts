@@ -227,6 +227,23 @@ export default function Dashboard({ supabase, session }) {
   const [publicPages, setPublicPages] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
+  // Group Scanner state
+  const [groupStreams, setGroupStreams] = useState([])
+  const [selectedGroupStreamId, setSelectedGroupStreamId] = useState(null)
+  const [groupPages, setGroupPages] = useState([])
+  const [newGroupStreamName, setNewGroupStreamName] = useState('')
+  const [newGroupPageUrl, setNewGroupPageUrl] = useState('')
+  const [newGroupPageName, setNewGroupPageName] = useState('')
+  const [showAddGroupStream, setShowAddGroupStream] = useState(false)
+  const [showGroupPages, setShowGroupPages] = useState(false)
+  const [showAddGroupPage, setShowAddGroupPage] = useState(false)
+  const [groupTimeWindow, setGroupTimeWindow] = useState(24)
+  const [groupMinComments, setGroupMinComments] = useState(50)
+  const [groupMinReactions, setGroupMinReactions] = useState(10)
+  const [groupScanStatus, setGroupScanStatus] = useState('idle')
+  const [groupScanMessage, setGroupScanMessage] = useState('')
+  const [groupPosts, setGroupPosts] = useState([])
+  const [groupScanStats, setGroupScanStats] = useState({ totalScraped: 0, filteredOut: 0, costUsd: null })
   const abortRef = useRef(false)
   const activeScanRef = useRef(null)
   const [bgScanRunning, setBgScanRunning] = useState(null)
@@ -234,8 +251,9 @@ export default function Dashboard({ supabase, session }) {
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedStreamId])
+  useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
   useEffect(() => {
     if (pendingRerun && pages.length > 0 && view === 'streams') {
@@ -244,8 +262,25 @@ export default function Dashboard({ supabase, session }) {
     }
   }, [pendingRerun, pages, view])
 
-  async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setStreams(data || []) }
+  async function loadStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).or('type.eq.rising,type.is.null').order('created_at', { ascending: true }); setStreams(data || []) }
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
+
+  // Group stream functions
+  async function loadGroupStreams() { const { data } = await supabase.from('streams').select('*').eq('user_id', userId).eq('type', 'groups').order('created_at', { ascending: true }); setGroupStreams(data || []) }
+  async function loadGroupPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setGroupPages(data || []) }
+  async function createGroupStream(e) { e.preventDefault(); if (!newGroupStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newGroupStreamName.trim(), type: 'groups' }).select().single(); if (!error && data) { setGroupStreams([...groupStreams, data]); setSelectedGroupStreamId(data.id); setNewGroupStreamName(''); setShowAddGroupStream(false); setView('groups') } }
+  async function deleteGroupStream(id) { if (!confirm('Delete this group stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setGroupStreams(groupStreams.filter((s) => s.id !== id)); if (selectedGroupStreamId === id) { const r = groupStreams.filter((s) => s.id !== id); setSelectedGroupStreamId(r.length ? r[0].id : null) } }
+  async function addGroupPage(e) {
+    e.preventDefault(); if (!newGroupPageUrl.trim()) return
+    let url = newGroupPageUrl.trim()
+    if (!url.startsWith('http')) url = 'https://www.facebook.com/groups/' + url.replace(/^\/+/, '')
+    const existing = groupPages.find(p => p.url.replace(/\/$/, '').toLowerCase() === url.replace(/\/$/, '').toLowerCase())
+    if (existing) { showToast(`"${existing.display_name}" is already in this stream.`, 'error'); return }
+    const { data, error } = await supabase.from('monitored_pages').insert({ user_id: userId, stream_id: selectedGroupStreamId, url, display_name: newGroupPageName.trim() || url.split('groups/')[1]?.replace(/\/$/, '') || url, platform: 'facebook' }).select().single()
+    if (!error && data) { setGroupPages([...groupPages, data]); setNewGroupPageUrl(''); setNewGroupPageName(''); showToast('Group added!') }
+    else if (error) { showToast('Failed to add group.', 'error') }
+  }
+  async function deleteGroupPage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setGroupPages(groupPages.filter((p) => p.id !== id)) }
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
@@ -261,7 +296,7 @@ export default function Dashboard({ supabase, session }) {
   }
   async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
 
-  async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim() }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
+  async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim(), type: 'rising' }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
   async function deleteStream(id) { if (!confirm('Delete this stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id)); if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) } }
   function showToast(msg, type = 'success', duration = 2500) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -501,6 +536,74 @@ export default function Dashboard({ supabase, session }) {
     }
   }
 
+  // ─── Group Scanner ───
+  const isGroupScanning = ['starting', 'scanning', 'processing'].includes(groupScanStatus)
+
+  async function startGroupScan() {
+    if (groupPages.length === 0) { setGroupScanMessage('Add some groups first.'); setGroupScanStatus('error'); return }
+    abortRef.current = false
+    const scanId = Date.now()
+    const scanLabel = groupStreams.find(s => s.id === selectedGroupStreamId)?.name || 'Group Scan'
+    activeScanRef.current = { id: scanId, label: scanLabel }
+    const fg = () => activeScanRef.current?.id === scanId
+
+    const token = session?.access_token
+    setGroupScanStatus('starting'); setGroupScanMessage('Starting group scan...'); setGroupPosts([]); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
+    try {
+      const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls: groupPages.map(p => p.url), timeWindowHours: groupTimeWindow, platform: 'facebook' }) })
+      if (!startRes.ok) { let errBody; try { errBody = await startRes.json() } catch { errBody = {} }; throw new Error(errBody?.userMessage || errBody?.error || 'Failed to start scan') }
+      const { runId } = await startRes.json()
+      if (fg()) { setGroupScanStatus('scanning'); setGroupScanMessage('Scanning groups...') }
+
+      let status = 'RUNNING'
+      let costUsd = null
+      while (status === 'RUNNING' || status === 'READY') {
+        if (abortRef.current && fg()) {
+          try { await fetch(`/api/scan/status?runId=${runId}&abort=true`, { headers: { Authorization: `Bearer ${token}` } }) } catch {}
+          setGroupScanStatus('idle'); setGroupScanMessage('Scan stopped.'); activeScanRef.current = null; return
+        }
+        await new Promise(r => setTimeout(r, 5000))
+        if (abortRef.current && fg()) { setGroupScanStatus('idle'); setGroupScanMessage('Scan stopped.'); activeScanRef.current = null; return }
+        const statusRes = await fetch(`/api/scan/status?runId=${runId}`, { headers: { Authorization: `Bearer ${token}` } })
+        const statusData = await statusRes.json()
+        status = statusData.status
+        if (statusData.costUsd) costUsd = statusData.costUsd
+        if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Scan ${status.toLowerCase()}. Try again.`)
+      }
+
+      if (fg()) { setGroupScanStatus('processing'); setGroupScanMessage('Filtering by engagement...') }
+      const resultsRes = await fetch(`/api/scan/results/groups?runId=${runId}&timeWindowHours=${groupTimeWindow}&minComments=${groupMinComments}&minReactions=${groupMinReactions}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!resultsRes.ok) { const err = await resultsRes.json(); throw new Error(err.error || 'Failed to process results') }
+
+      const { posts, totalScraped, filteredOut, costUsd: finalCost } = await resultsRes.json()
+      const cost = finalCost ?? costUsd
+
+      if (fg()) {
+        setGroupPosts(posts); setGroupScanStats({ totalScraped, filteredOut, costUsd: cost }); setGroupScanStatus('done')
+        setGroupScanMessage(posts.length > 0 ? `Found ${posts.length} post${posts.length === 1 ? '' : 's'} with high engagement.` : `No posts meet your thresholds.`)
+        activeScanRef.current = null
+      } else {
+        showToast(`${scanLabel} — ${posts.length} group post${posts.length === 1 ? '' : 's'} found`, 'success', 5000)
+        setBgScanRunning(null)
+      }
+      if (posts.length > 0) saveGroupScanResults(posts, { totalScraped, filteredOut, costUsd: cost })
+    } catch (err) {
+      if (fg()) { setGroupScanStatus('error'); setGroupScanMessage(err.message); activeScanRef.current = null }
+      else { showToast(`${scanLabel} scan failed`, 'error', 5000); setBgScanRunning(null) }
+    }
+  }
+
+  async function saveGroupScanResults(posts, stats) {
+    if (!posts || posts.length === 0) return
+    const streamName = groupStreams.find(s => s.id === selectedGroupStreamId)?.name
+    const now = new Date()
+    const GROUP_TIME_OPTIONS = [{ value: 6, label: '6h' }, { value: 12, label: '12h' }, { value: 24, label: '24h' }, { value: 48, label: '48h' }, { value: 72, label: '72h' }]
+    const timeLabel = GROUP_TIME_OPTIONS.find(t => t.value === groupTimeWindow)?.label || `${groupTimeWindow}h`
+    const name = `${streamName || 'Group Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: selectedGroupStreamId, name, time_window: groupTimeWindow, min_interactions: groupMinComments, max_interactions: groupMinReactions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0, scan_type: 'groups' }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').single()
+    if (!error && data) { setSavedScans([data, ...savedScans]) }
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-50">
       {toast && (
@@ -570,6 +673,29 @@ export default function Dashboard({ supabase, session }) {
               ))}
             </>
           )}
+
+          {/* Group Scanner */}
+          <div className="flex items-center justify-between mb-2 mt-6">
+            <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Group Scanner</span>
+            <button onClick={() => setShowAddGroupStream(!showAddGroupStream)} className="text-slate-400 hover:text-blue-500 transition-colors">{Icons.plus}</button>
+          </div>
+          {showAddGroupStream && (
+            <form onSubmit={createGroupStream} className="mb-3">
+              <input type="text" value={newGroupStreamName} onChange={(e) => setNewGroupStreamName(e.target.value)} placeholder="Group stream name..." autoFocus className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400 mb-2" />
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs font-semibold text-white transition-colors">Create</button>
+                <button type="button" onClick={() => { setShowAddGroupStream(false); setNewGroupStreamName('') }} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs text-slate-500 transition-colors">Cancel</button>
+              </div>
+            </form>
+          )}
+          {groupStreams.length === 0 && !showAddGroupStream && <p className="text-sm text-slate-400 mt-1">No group streams yet.</p>}
+          {groupStreams.map((stream) => (
+            <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'groups' && selectedGroupStreamId === stream.id ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+              onClick={() => { setView('groups'); setSelectedGroupStreamId(stream.id); setSelectedStreamId(null); setSelectedSavedScan(null) }}>
+              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">👥</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
+              <button onClick={(e) => { e.stopPropagation(); deleteGroupStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
+            </div>
+          ))}
         </div>
 
         <div className="shrink-0 p-3 border-t border-slate-100 flex flex-col gap-1">
@@ -797,6 +923,138 @@ export default function Dashboard({ supabase, session }) {
               )}
             </div>
           </div>
+        )}
+
+        {/* ─── Group Scanner ─── */}
+        {view === 'groups' && selectedGroupStreamId && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 max-w-4xl">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">👥</span>
+                  <h2 className="text-xl font-bold text-slate-900">{groupStreams.find(s => s.id === selectedGroupStreamId)?.name}</h2>
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <p className="text-sm text-blue-700"><strong>Blog Content Finder</strong> — This scans Facebook groups for posts with high engagement (lots of comments and reactions). These are the conversations people care about, making them perfect source material for blog posts and articles.</p>
+              </div>
+
+              {/* Pages bar */}
+              <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3"><span className="text-slate-400">👥</span><span className="text-sm text-slate-600 font-medium">{groupPages.length} group{groupPages.length !== 1 ? 's' : ''} monitored</span></div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAddGroupPage(!showAddGroupPage); setShowGroupPages(false) }} className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">+ Add Group</button>
+                  <button onClick={() => { setShowGroupPages(!showGroupPages); setShowAddGroupPage(false) }} className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Manage {showGroupPages ? '▴' : '▾'}</button>
+                </div>
+              </div>
+
+              {showAddGroupPage && (
+                <form onSubmit={addGroupPage} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 mb-4">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Group URL or name</label>
+                      <input type="text" value={newGroupPageUrl} onChange={(e) => setNewGroupPageUrl(e.target.value)} placeholder="facebook.com/groups/example or just the group name" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div className="w-40">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Label (optional)</label>
+                      <input type="text" value={newGroupPageName} onChange={(e) => setNewGroupPageName(e.target.value)} placeholder="Nickname" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-semibold text-white transition-colors">Add</button>
+                  </div>
+                </form>
+              )}
+
+              {showGroupPages && groupPages.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 mb-4 space-y-1">
+                  {groupPages.map((page) => (
+                    <div key={page.id} className="group flex items-center justify-between py-1.5">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-slate-700">{page.display_name}</span>
+                        <span className="text-xs text-slate-400 ml-2 truncate">{page.url.replace('https://www.facebook.com/', '')}</span>
+                      </div>
+                      <button onClick={() => deleteGroupPage(page.id)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Scan controls */}
+              <div className="pt-4 border-t border-slate-200 mb-5">
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">🕐 Time Window</label>
+                    <select value={groupTimeWindow} onChange={(e) => setGroupTimeWindow(parseFloat(e.target.value))} className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400">
+                      <option value={6}>Last 6 hours</option>
+                      <option value={12}>Last 12 hours</option>
+                      <option value={24}>Last 24 hours</option>
+                      <option value={48}>Last 48 hours</option>
+                      <option value={72}>Last 72 hours</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">💬 Min Comments</label>
+                    <input type="number" value={groupMinComments} onChange={(e) => setGroupMinComments(parseInt(e.target.value) || 0)} className="w-24 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">👍 Min Reactions</label>
+                    <input type="number" value={groupMinReactions} onChange={(e) => setGroupMinReactions(parseInt(e.target.value) || 0)} className="w-24 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={startGroupScan} disabled={isGroupScanning || groupPages.length === 0}
+                      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${isGroupScanning ? 'bg-blue-100 text-blue-500 border border-blue-200 cursor-not-allowed animate-pulse-glow' : groupPages.length === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-sm shadow-blue-500/20 hover:shadow-md'}`}>
+                      {Icons.scan}{isGroupScanning ? 'Scanning...' : 'Scan Groups'}
+                    </button>
+                    {isGroupScanning && (
+                      <button onClick={stopScan} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">Finds group posts with {groupMinComments}+ comments and {groupMinReactions}+ reactions — perfect for turning into blog content.</p>
+              </div>
+
+              <ScanSummary status={groupScanStatus} message={groupScanMessage} postCount={groupPosts.length} totalScraped={groupScanStats.totalScraped} filteredOut={groupScanStats.filteredOut} costUsd={groupScanStats.costUsd} />
+              {isGroupScanning && <ScanningAnimation />}
+              {groupPosts.length > 0 && (
+                <div className="space-y-3">
+                  {groupPosts.map((post, i) => (
+                    <div key={post.post_id || i} className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-sm transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">👥</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{post.page_name}</span>
+                          {post.age_hours != null && <span className="text-xs text-slate-400">({post.age_hours}h old)</span>}
+                        </div>
+                        {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-blue-500 transition-colors">{Icons.external}</a>}
+                      </div>
+                      <p className="text-slate-800 text-base leading-relaxed mb-3">{post.content_preview}</p>
+                      {post.reason && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-3">
+                          <p className="text-sm text-blue-700"><span className="font-semibold">📝 Why this post:</span> {post.reason}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex gap-3">
+                          <span className="text-slate-500">💬 <strong className="text-blue-600">{post.comments}</strong></span>
+                          <span className="text-slate-500">👍 <strong className="text-blue-600">{post.reactions}</strong></span>
+                          <span className="text-slate-500">↗ {post.shares}</span>
+                        </div>
+                        <span className="text-xs text-slate-400">Total {formatNumber(post.total_interactions)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {groupScanStatus === 'done' && groupPosts.length === 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No posts met your thresholds. Try lowering the minimum comments or reactions, or widening the time window.</p></div>
+              )}
+            </div>
+          </div>
+        )}
+        {view === 'groups' && !selectedGroupStreamId && (
+          <div className="flex-1 flex items-center justify-center"><p className="text-slate-400">Select or create a group stream to start scanning.</p></div>
         )}
       </div>
     </div>
