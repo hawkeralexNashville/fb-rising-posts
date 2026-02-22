@@ -17,8 +17,8 @@ export async function POST(request) {
     const { post, project } = await request.json()
     if (!post || !project) return NextResponse.json({ error: 'Missing post or project' }, { status: 400 })
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 })
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
 
     const systemPrompt = `You are a strategic content analyst. You help content creators turn trending social media posts into winning content for their specific niche.
 
@@ -76,29 +76,31 @@ Content: ${post.content_preview || '[No text content]'}
 ENGAGEMENT METRICS:
 ${metricsStr}`
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'gpt-4o-mini',
         max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+        temperature: 0.7,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
       }),
     })
 
-    if (!anthropicRes.ok) {
-      const err = await anthropicRes.json().catch(() => ({}))
-      console.error('Anthropic API error:', anthropicRes.status, err)
+    if (!openaiRes.ok) {
+      const err = await openaiRes.json().catch(() => ({}))
+      console.error('OpenAI API error:', openaiRes.status, err)
       return NextResponse.json({ error: 'AI analysis failed. Check API key.' }, { status: 502 })
     }
 
-    const anthropicData = await anthropicRes.json()
-    const text = anthropicData.content?.[0]?.text || ''
+    const openaiData = await openaiRes.json()
+    const text = openaiData.choices?.[0]?.message?.content || ''
 
     // Parse JSON from response
     let strategy
