@@ -665,6 +665,30 @@ export default function Dashboard({ supabase, session }) {
               <button onClick={(e) => { e.stopPropagation(); deleteStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
             </div>
           ))}
+
+          {/* Group Scanner */}
+          <div className="flex items-center justify-between mb-2 mt-6">
+            <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Group Scanner</span>
+            <button onClick={() => setShowAddGroupStream(!showAddGroupStream)} className="text-slate-400 hover:text-blue-500 transition-colors">{Icons.plus}</button>
+          </div>
+          {showAddGroupStream && (
+            <form onSubmit={createGroupStream} className="mb-3">
+              <input type="text" value={newGroupStreamName} onChange={(e) => setNewGroupStreamName(e.target.value)} placeholder="Group stream name..." autoFocus className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400 mb-2" />
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs font-semibold text-white transition-colors">Create</button>
+                <button type="button" onClick={() => { setShowAddGroupStream(false); setNewGroupStreamName('') }} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs text-slate-500 transition-colors">Cancel</button>
+              </div>
+            </form>
+          )}
+          {groupStreams.length === 0 && !showAddGroupStream && <p className="text-sm text-slate-400 mt-1">No group streams yet.</p>}
+          {groupStreams.map((stream) => (
+            <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'groups' && selectedGroupStreamId === stream.id ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+              onClick={() => { setView('groups'); setSelectedGroupStreamId(stream.id); setSelectedStreamId(null); setSelectedSavedScan(null) }}>
+              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">👥</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
+              <button onClick={(e) => { e.stopPropagation(); deleteGroupStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
+            </div>
+          ))}
+
           {savedScans.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saved Scans</span></div>
@@ -689,29 +713,6 @@ export default function Dashboard({ supabase, session }) {
               ))}
             </>
           )}
-
-          {/* Group Scanner */}
-          <div className="flex items-center justify-between mb-2 mt-6">
-            <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">Group Scanner</span>
-            <button onClick={() => setShowAddGroupStream(!showAddGroupStream)} className="text-slate-400 hover:text-blue-500 transition-colors">{Icons.plus}</button>
-          </div>
-          {showAddGroupStream && (
-            <form onSubmit={createGroupStream} className="mb-3">
-              <input type="text" value={newGroupStreamName} onChange={(e) => setNewGroupStreamName(e.target.value)} placeholder="Group stream name..." autoFocus className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400 mb-2" />
-              <div className="flex gap-2">
-                <button type="submit" className="flex-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs font-semibold text-white transition-colors">Create</button>
-                <button type="button" onClick={() => { setShowAddGroupStream(false); setNewGroupStreamName('') }} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs text-slate-500 transition-colors">Cancel</button>
-              </div>
-            </form>
-          )}
-          {groupStreams.length === 0 && !showAddGroupStream && <p className="text-sm text-slate-400 mt-1">No group streams yet.</p>}
-          {groupStreams.map((stream) => (
-            <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'groups' && selectedGroupStreamId === stream.id ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-              onClick={() => { setView('groups'); setSelectedGroupStreamId(stream.id); setSelectedStreamId(null); setSelectedSavedScan(null) }}>
-              <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">👥</span><span className="text-sm font-medium truncate">{stream.name}</span></div>
-              <button onClick={(e) => { e.stopPropagation(); deleteGroupStream(stream.id) }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all">{Icons.trash}</button>
-            </div>
-          ))}
         </div>
 
         <div className="shrink-0 p-3 border-t border-slate-100 flex flex-col gap-1">
