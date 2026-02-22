@@ -191,8 +191,107 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   )
 }
 
+// ─── Strategy Panel ───
+function StrategyPanel({ strategy, loading, error }) {
+  const [expanded, setExpanded] = useState(true)
+  if (loading) return (
+    <div className="mt-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 animate-pulse">
+      <div className="flex items-center gap-2"><span className="text-sm">🧠</span><span className="text-sm font-medium text-violet-600">Generating strategy…</span></div>
+    </div>
+  )
+  if (error) return (
+    <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+      <p className="text-sm text-red-600">{error}</p>
+    </div>
+  )
+  if (!strategy) return null
+
+  const isLow = strategy.relevance === 'low'
+  const relColor = strategy.relevance === 'high' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : strategy.relevance === 'moderate' ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-slate-500 bg-slate-50 border-slate-200'
+
+  const copyText = (text) => { navigator.clipboard.writeText(text) }
+
+  return (
+    <div className="mt-3 bg-violet-50 border border-violet-200 rounded-xl overflow-hidden">
+      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-violet-100/50 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🧠</span>
+          <span className="text-sm font-semibold text-violet-700">Strategic Analysis</span>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${relColor}`}>{strategy.relevance} relevance</span>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-violet-400 transition-transform ${expanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          {strategy.relevance_reason && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Relevance</p><p className="text-sm text-slate-700">{strategy.relevance_reason}</p></div>}
+          {strategy.why_trending && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Why It's Trending</p><p className="text-sm text-slate-700">{strategy.why_trending}</p></div>}
+
+          {!isLow && (
+            <>
+              {strategy.positioning_fit && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Positioning Fit</p><p className="text-sm text-slate-700">{strategy.positioning_fit}</p></div>}
+              {strategy.best_angle && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Best Angle</p><p className="text-sm text-slate-700">{strategy.best_angle}</p></div>}
+
+              {strategy.hooks?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-2">Hook Variations</p>
+                  <div className="space-y-1.5">
+                    {strategy.hooks.map((hook, i) => (
+                      <div key={i} className="group flex items-start gap-2 bg-white border border-violet-100 rounded-lg px-3 py-2">
+                        <span className="text-xs text-violet-400 font-bold mt-0.5">{i + 1}</span>
+                        <p className="text-sm text-slate-700 flex-1">{hook}</p>
+                        <button onClick={() => copyText(hook)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {strategy.engagement_question && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Engagement Question</p>
+                  <div className="group flex items-start gap-2 bg-white border border-violet-100 rounded-lg px-3 py-2">
+                    <p className="text-sm text-slate-700 flex-1">{strategy.engagement_question}</p>
+                    <button onClick={() => copyText(strategy.engagement_question)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {strategy.monetization_direction && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Monetization</p><p className="text-sm text-slate-700">{strategy.monetization_direction}</p></div>}
+              {strategy.risk_warnings && <div><p className="text-xs font-semibold uppercase tracking-wider text-amber-500 mb-1">⚠️ Risks</p><p className="text-sm text-slate-600">{strategy.risk_warnings}</p></div>}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Rising Posts List ───
-function RisingPostsList({ posts }) {
+function RisingPostsList({ posts, activeProject, session }) {
+  const [strategies, setStrategies] = useState({})
+
+  async function generateStrategy(post) {
+    if (!activeProject) return
+    const postId = post.post_id
+    setStrategies(prev => ({ ...prev, [postId]: { loading: true, strategy: null, error: null } }))
+    try {
+      const res = await fetch('/api/ai/strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ post, project: activeProject }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate strategy')
+      setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: data.strategy, error: null } }))
+    } catch (err) {
+      setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: null, error: err.message } }))
+    }
+  }
+
   if (!posts || posts.length === 0) return null
   return (
     <div className="space-y-3">
@@ -203,6 +302,7 @@ function RisingPostsList({ posts }) {
         const m1Val = Object.values(metrics)[0] || 0
         const m2Val = Object.values(metrics)[1] || 0
         const m3Val = Object.values(metrics)[2] || 0
+        const strat = strategies[post.post_id]
         return (
           <div key={post.post_id || i} className="bg-white border border-slate-200 rounded-2xl p-5 animate-slide-up hover:border-slate-300 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -230,6 +330,15 @@ function RisingPostsList({ posts }) {
                 <span>{labels.m3} {formatNumber(m3Val)}</span>
               </div>
             </div>
+
+            {/* Strategy section */}
+            {activeProject && !strat && (
+              <button onClick={() => generateStrategy(post)}
+                className="mt-3 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition-all">
+                <span>🧠</span> Generate Strategy
+              </button>
+            )}
+            {strat && <StrategyPanel strategy={strat.strategy} loading={strat.loading} error={strat.error} />}
           </div>
         )
       })}
@@ -292,6 +401,10 @@ export default function Dashboard({ supabase, session }) {
   const [publicPages, setPublicPages] = useState([])
   const [showPublicPages, setShowPublicPages] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  // Projects state
+  const [projects, setProjects] = useState([])
+  const [activeProjectId, setActiveProjectId] = useState(null)
+  const [editingProject, setEditingProject] = useState(null)
   const [pendingRerun, setPendingRerun] = useState(null)
   // Group Scanner state
   const [groupStreams, setGroupStreams] = useState([])
@@ -317,7 +430,7 @@ export default function Dashboard({ supabase, session }) {
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
@@ -347,6 +460,20 @@ export default function Dashboard({ supabase, session }) {
     else if (error) { showToast('Failed to add group.', 'error') }
   }
   async function deleteGroupPage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setGroupPages(groupPages.filter((p) => p.id !== id)) }
+
+  // ─── Project functions ───
+  async function loadProjects() { const { data } = await supabase.from('projects').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setProjects(data || []) }
+  async function saveProject(proj) {
+    if (proj.id) {
+      const { data, error } = await supabase.from('projects').update({ name: proj.name, niche: proj.niche, audience: proj.audience, tone: proj.tone, monetization_goal: proj.monetization_goal, risk_tolerance: proj.risk_tolerance, custom_instructions: proj.custom_instructions, updated_at: new Date().toISOString() }).eq('id', proj.id).select().single()
+      if (!error && data) { setProjects(projects.map(p => p.id === data.id ? data : p)); setEditingProject(null); showToast('Project saved!') }
+    } else {
+      const { data, error } = await supabase.from('projects').insert({ user_id: userId, name: proj.name, niche: proj.niche, audience: proj.audience, tone: proj.tone, monetization_goal: proj.monetization_goal, risk_tolerance: proj.risk_tolerance, custom_instructions: proj.custom_instructions }).select().single()
+      if (!error && data) { setProjects([...projects, data]); setActiveProjectId(data.id); setEditingProject(null); showToast('Project created!') }
+    }
+  }
+  async function deleteProject(id) { if (!confirm('Delete this project?')) return; await supabase.from('projects').delete().eq('id', id); setProjects(projects.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null); showToast('Project deleted.') }
+  const activeProject = projects.find(p => p.id === activeProjectId) || null
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
@@ -758,6 +885,29 @@ export default function Dashboard({ supabase, session }) {
             </div>
           ))}
 
+          {/* Projects */}
+          <div className="flex items-center justify-between mb-2 mt-6">
+            <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">Projects</span>
+            <button onClick={() => { setEditingProject({ name: '', niche: '', audience: '', tone: '', monetization_goal: '', risk_tolerance: 'moderate', custom_instructions: '' }); setView('project-edit') }} className="text-slate-400 hover:text-violet-500 transition-colors">{Icons.plus}</button>
+          </div>
+          {projects.length === 0 && <p className="text-sm text-slate-400 mt-1">No projects yet.</p>}
+          {projects.map((proj) => (
+            <div key={proj.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${activeProjectId === proj.id ? 'bg-violet-50 text-violet-600 border border-violet-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+              onClick={() => setActiveProjectId(activeProjectId === proj.id ? null : proj.id)}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="shrink-0 text-sm">🧠</span>
+                <span className="text-sm font-medium truncate">{proj.name}</span>
+                {activeProjectId === proj.id && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />}
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={(e) => { e.stopPropagation(); setEditingProject(proj); setView('project-edit') }} className="text-slate-300 hover:text-violet-500 transition-colors">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); deleteProject(proj.id) }} className="text-slate-300 hover:text-red-400 transition-colors">{Icons.trash}</button>
+              </div>
+            </div>
+          ))}
+
           {savedScans.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saved Scans</span></div>
@@ -815,6 +965,83 @@ export default function Dashboard({ supabase, session }) {
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
 
+        {/* ─── Project Editor ─── */}
+        {view === 'project-edit' && editingProject && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 max-w-2xl">
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-2xl">🧠</span>
+                <h2 className="text-xl font-bold text-slate-900">{editingProject.id ? 'Edit Project' : 'New Project'}</h2>
+              </div>
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-6">
+                <p className="text-sm text-violet-700">Projects define your content strategy. When active, each trending post gets a "Generate Strategy" button that produces niche-specific hooks, angles, and monetization advice tailored to these settings.</p>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Project Name *</label>
+                  <input type="text" value={editingProject.name} onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })} placeholder="e.g., Finance Page, Crypto Newsletter" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Niche *</label>
+                  <input type="text" value={editingProject.niche} onChange={(e) => setEditingProject({ ...editingProject, niche: e.target.value })} placeholder="e.g., Financial news and economics for retail investors" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
+                  <p className="text-xs text-slate-400 mt-1">Be specific. "Finance" is vague. "Breaking financial news that impacts everyday investors" is better.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Target Audience *</label>
+                  <input type="text" value={editingProject.audience} onChange={(e) => setEditingProject({ ...editingProject, audience: e.target.value })} placeholder="e.g., 25-55 year olds interested in stocks, crypto, and economic policy" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Tone *</label>
+                  <input type="text" value={editingProject.tone} onChange={(e) => setEditingProject({ ...editingProject, tone: e.target.value })} placeholder="e.g., Bold and opinionated but factual, uses urgency" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
+                  <p className="text-xs text-slate-400 mt-1">This directly shapes the hooks and angles the AI generates. Be descriptive.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Monetization Goal *</label>
+                  <input type="text" value={editingProject.monetization_goal} onChange={(e) => setEditingProject({ ...editingProject, monetization_goal: e.target.value })} placeholder="e.g., Facebook ad revenue + drive traffic to blog with display ads" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Risk Tolerance</label>
+                  <select value={editingProject.risk_tolerance} onChange={(e) => setEditingProject({ ...editingProject, risk_tolerance: e.target.value })} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-violet-400 cursor-pointer">
+                    <option value="low">Low — Play it safe, avoid anything controversial</option>
+                    <option value="moderate">Moderate — Take measured positions, avoid extremes</option>
+                    <option value="high">High — Lean into hot takes and controversy for engagement</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Custom Instructions (optional)</label>
+                  <textarea value={editingProject.custom_instructions || ''} onChange={(e) => setEditingProject({ ...editingProject, custom_instructions: e.target.value })} placeholder="Any additional rules or preferences. e.g., Never mention specific stock tickers. Always include a call-to-action." rows={3} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20 resize-none" />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => { if (!editingProject.name || !editingProject.niche) { showToast('Name and Niche are required.', 'error'); return }; saveProject(editingProject) }}
+                  className="px-6 py-2.5 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 rounded-xl text-sm font-semibold text-white shadow-sm transition-all">
+                  {editingProject.id ? 'Save Changes' : 'Create Project'}
+                </button>
+                <button onClick={() => { setEditingProject(null); if (projects.length > 0) setView('quick'); else setView('quick') }}
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-medium text-slate-600 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Active Project Bar (shows above all scan views) ─── */}
+        {view !== 'account' && view !== 'admin' && view !== 'project-edit' && projects.length > 0 && (
+          <div className="shrink-0 px-6 pt-4 pb-0 max-w-4xl">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+              <span className="text-sm">🧠</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Project</span>
+              <select value={activeProjectId || ''} onChange={(e) => setActiveProjectId(e.target.value || null)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-violet-400 cursor-pointer">
+                <option value="">None — No AI strategy</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {activeProject && <span className="text-xs text-violet-500 font-medium">{activeProject.niche}</span>}
+            </div>
+          </div>
+        )}
+
         {/* ─── Quick Scan ─── */}
         {view === 'quick' && (
           <div className="flex-1 overflow-y-auto">
@@ -834,7 +1061,7 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
               {isQuickScanning && <ScanningAnimation />}
-              <RisingPostsList posts={quickRisingPosts} />
+              <RisingPostsList posts={quickRisingPosts} activeProject={activeProject} session={session} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -858,7 +1085,7 @@ export default function Dashboard({ supabase, session }) {
                 className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors mb-6">
                 {Icons.zap} Run This Scan Again
               </button>
-              <RisingPostsList posts={selectedSavedScan.results || []} />
+              <RisingPostsList posts={selectedSavedScan.results || []} activeProject={activeProject} session={session} />
               {(!selectedSavedScan.results || selectedSavedScan.results.length === 0) && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">This saved scan has no results.</p></div>
               )}
@@ -987,7 +1214,7 @@ export default function Dashboard({ supabase, session }) {
                 </div>
               )}
 
-              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} />}
+              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} activeProject={activeProject} session={session} />}
               {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
                   <p className="text-base text-slate-400">All {risingPosts.length} rising posts were filtered out by the {CATEGORIES[streamCategory]?.label} filter.</p>
@@ -1064,7 +1291,7 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
-              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} />}
+              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} activeProject={activeProject} session={session} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center"><p className="text-base text-slate-400">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
