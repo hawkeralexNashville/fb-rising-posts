@@ -2,8 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 function normalizeFacebookGroup(post) {
-  const reactions = post.likesCount || post.likes || post.reactionsCount || post.reactions || 0
-  const comments = post.commentsCount || post.comments || post.numberOfComments || 0
+  // Groups scraper uses: likesCount/reactionsCount, commentsCount/numberOfComments, sharesCount
+  const reactions = post.likesCount || post.reactionsCount || post.likes || post.reactions || 0
+  const comments = post.commentsCount || post.numberOfComments || post.comments || 0
   const shares = post.sharesCount || post.shares || 0
   return {
     post_id: post.postId || post.id || post.postUrl || post.url || Math.random().toString(36).slice(2),
@@ -14,8 +15,8 @@ function normalizeFacebookGroup(post) {
     shares,
     total_interactions: reactions + comments + shares,
     posted_at: post.time || post.postTimestamp || post.timestamp || post.date || post.createdAt || post.postedAt || null,
-    page_name: post.pageName || post.authorName || post.pageTitle || post.groupName || post.author?.name || '',
-    page_url: post.pageUrl || post.groupUrl || '',
+    page_name: post.groupName || post.pageName || post.authorName || post.pageTitle || post.author?.name || '',
+    page_url: post.groupUrl || post.pageUrl || '',
     platform: 'facebook',
     metrics: { reactions, comments, shares },
     metric_labels: { m1: 'Reactions', m2: 'Comments', m3: 'Shares' },
@@ -55,8 +56,11 @@ export async function GET(request) {
     const rawPosts = await dataRes.json()
 
     if (!Array.isArray(rawPosts) || rawPosts.length === 0) {
+      console.log('Group scan: no raw posts returned from dataset', datasetId)
       return NextResponse.json({ posts: [], totalScraped: 0, filteredOut: 0, costUsd })
     }
+
+    console.log(`Group scan: ${rawPosts.length} raw posts. Sample keys:`, Object.keys(rawPosts[0]).join(', '))
 
     const normalizedPosts = rawPosts.map((p) => normalizeFacebookGroup(p)).filter((p) => p.post_id)
     const totalScraped = normalizedPosts.length

@@ -12,12 +12,12 @@ function parseApifyError(status, body) {
 
 function getResultsLimit(timeWindowHours, scanType) {
   if (scanType === 'groups') {
-    // Groups need more posts — we're filtering by engagement, not velocity
-    if (timeWindowHours <= 6) return 50
-    if (timeWindowHours <= 12) return 75
-    if (timeWindowHours <= 24) return 100
-    if (timeWindowHours <= 48) return 150
-    return 200
+    // Groups use browser-based scraper (more expensive) — balance coverage vs cost
+    if (timeWindowHours <= 6) return 30
+    if (timeWindowHours <= 12) return 40
+    if (timeWindowHours <= 24) return 50
+    if (timeWindowHours <= 48) return 75
+    return 100
   }
   if (timeWindowHours <= 1) return 5
   if (timeWindowHours <= 2) return 5
@@ -28,7 +28,19 @@ function getResultsLimit(timeWindowHours, scanType) {
 }
 
 // Platform-specific Apify actor configs
-function getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours) {
+function getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours, scanType) {
+  // Groups need a dedicated browser-based scraper — Facebook blocks GraphQL access for groups
+  if (scanType === 'groups') {
+    return {
+      actorId: 'apify~facebook-groups-scraper',
+      input: {
+        startUrls: pageUrls.map((url) => ({ url })),
+        resultsLimit,
+        since: new Date(Date.now() - timeWindowHours * 3600000).toISOString().split('T')[0],
+      },
+    }
+  }
+
   switch (platform) {
     case 'x':
       // Extract handles from URLs where possible
@@ -89,7 +101,7 @@ export async function POST(request) {
     if (!process.env.APIFY_API_TOKEN) return NextResponse.json({ error: 'Apify API token not configured.' }, { status: 500 })
 
     const resultsLimit = getResultsLimit(timeWindowHours || 24, scanType)
-    const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours || 24)
+    const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours || 24, scanType)
 
     const apifyRes = await fetch(
       `https://api.apify.com/v2/acts/${actorId}/runs?token=${process.env.APIFY_API_TOKEN}`,
