@@ -568,6 +568,7 @@ export default function Dashboard({ supabase, session }) {
   const [quickRisingPosts, setQuickRisingPosts] = useState([])
   const [quickScanStats, setQuickScanStats] = useState({ totalScraped: 0, filteredOut: 0, costUsd: null })
   const [savedScans, setSavedScans] = useState([])
+  const [recentPublicScans, setRecentPublicScans] = useState([])
   const [selectedSavedScan, setSelectedSavedScan] = useState(null)
   const [settings, setSettings] = useState({ min_velocity: 50, min_delta: 20 })
   const [publicStreams, setPublicStreams] = useState([])
@@ -605,7 +606,7 @@ export default function Dashboard({ supabase, session }) {
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
@@ -668,6 +669,7 @@ export default function Dashboard({ supabase, session }) {
   }
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
+  async function loadRecentPublicScans() { const { data } = await supabase.from('saved_scans').select('id, name, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').order('created_at', { ascending: false }).limit(60); setRecentPublicScans(data || []) }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
   async function toggleStreamPublic(streamId, isPublic) {
     const displayName = session?.user?.email?.split('@')[0] || 'Anonymous'
@@ -729,7 +731,7 @@ export default function Dashboard({ supabase, session }) {
     const timeLabel = TIME_OPTIONS.find(t => t.value === timeWindow)?.label || `${timeWindow}h`
     const name = `${streamName || source || 'Quick Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
-    if (!error && data) { setSavedScans([data, ...savedScans]) }
+    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans() }
   }
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setBatchStrategy({ loading: false, strategy: null, error: null }) } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
@@ -1005,7 +1007,7 @@ export default function Dashboard({ supabase, session }) {
     const timeLabel = GROUP_TIME_OPTIONS.find(t => t.value === groupTimeWindow)?.label || `${groupTimeWindow}h`
     const name = `${streamName || 'Group Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: selectedGroupStreamId, name, time_window: groupTimeWindow, min_interactions: groupMinComments, max_interactions: groupMinReactions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0, scan_type: 'groups' }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').single()
-    if (!error && data) { setSavedScans([data, ...savedScans]) }
+    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans() }
   }
 
   return (
@@ -1245,24 +1247,22 @@ export default function Dashboard({ supabase, session }) {
               <div className="flex items-center gap-2 mb-6">
                 <span className="text-slate-400">{Icons.clock}</span>
                 <h2 className="text-xl font-bold text-slate-900">Recent Scans</h2>
-                <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{savedScans.length}</span>
+                <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">{recentPublicScans.length}</span>
               </div>
-              {savedScans.length === 0 ? (
+              {recentPublicScans.length === 0 ? (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300">{Icons.folder}</div>
                   <p className="text-base text-slate-400">No scans yet. Run a Quick Scan or Stream scan to get started.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {savedScans.map((scan) => {
-                    const streamName = streams.find(s => s.id === scan.stream_id)?.name
+                  {recentPublicScans.map((scan) => {
                     return (
                       <button key={scan.id} onClick={() => loadSavedScan(scan.id)}
                         className="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-orange-300 hover:shadow-md hover:shadow-orange-500/5 transition-all group">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             {scan.scan_type === 'groups' ? <span className="text-sm">👥</span> : <span className="text-slate-400">{Icons.folder}</span>}
-                            {streamName && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5 truncate max-w-[120px]">{streamName}</span>}
                           </div>
                           <span className="text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity">{Icons.link}</span>
                         </div>
