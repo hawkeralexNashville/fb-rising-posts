@@ -161,8 +161,20 @@ function PlatformTabs({ selected, onChange }) {
 }
 
 // ─── Scan Controls ───
-function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled, onStop }) {
+function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled, onStop, pageCount, scanType }) {
   const btnClass = isScanning ? 'bg-orange-100 text-orange-500 border border-orange-200 cursor-not-allowed animate-pulse-glow' : disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white shadow-sm shadow-orange-500/20 hover:shadow-md'
+
+  // Cost estimation
+  const getResultsLimit = (tw, type) => {
+    if (type === 'groups') {
+      if (tw <= 6) return 30; if (tw <= 12) return 40; if (tw <= 24) return 50; if (tw <= 48) return 75; return 100
+    }
+    if (tw <= 2) return 5; if (tw <= 6) return 10; if (tw <= 12) return 15; if (tw <= 24) return 20; return 30
+  }
+  const resultsLimit = getResultsLimit(timeWindow, scanType)
+  const costPerResult = scanType === 'groups' ? 0.0015 : 0.0005
+  const estimatedCost = pageCount > 0 ? (pageCount * resultsLimit * costPerResult) : 0
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -178,15 +190,24 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
           <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{Icons.filter} Max Interactions</label>
           <select value={maxInteractions} onChange={(e) => setMaxInteractions(parseInt(e.target.value))} className="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 appearance-none cursor-pointer pr-10" style={selectStyle}>{MAX_INTERACTION_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
         </div>
-        <button onClick={onScan} disabled={isScanning || disabled} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${btnClass}`}>{Icons.scan}{isScanning ? 'Scanning...' : 'Scan Now'}</button>
-        {isScanning && onStop && (
-          <button onClick={onStop} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-            Stop
-          </button>
-        )}
+        <div className="flex items-end gap-2">
+          <button onClick={onScan} disabled={isScanning || disabled} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${btnClass}`}>{Icons.scan}{isScanning ? 'Scanning...' : 'Scan Now'}</button>
+          {isScanning && onStop && (
+            <button onClick={onStop} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              Stop
+            </button>
+          )}
+        </div>
       </div>
-      <p className="text-xs text-slate-400">Shorter time windows pull fewer posts per page, reducing Apify costs.</p>
+      {pageCount > 0 && (
+        <div className="flex items-center gap-4 text-xs text-slate-400">
+          <span>{pageCount} page{pageCount !== 1 ? 's' : ''} × {resultsLimit} posts each</span>
+          <span>·</span>
+          <span className="font-medium text-slate-500">Est. cost: <span className={`${estimatedCost > 0.50 ? 'text-amber-500' : estimatedCost > 0.20 ? 'text-slate-500' : 'text-emerald-500'}`}>${estimatedCost.toFixed(2)}</span></span>
+        </div>
+      )}
+      {!pageCount && <p className="text-xs text-slate-400">Shorter time windows pull fewer posts per page, reducing Apify costs.</p>}
     </div>
   )
 }
@@ -1304,7 +1325,7 @@ export default function Dashboard({ supabase, session }) {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{PLATFORMS[quickPlatform].label} URL</label>
                   <input type="text" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} placeholder={PLATFORMS[quickPlatform].placeholder} className="w-full max-w-lg px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all" />
                 </div>
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} onStop={stopScan} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} onStop={stopScan} pageCount={quickUrl.trim() ? quickUrl.trim().split('\n').filter(u => u.trim()).length : 0} />
               </form>
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
@@ -1460,7 +1481,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <div className="mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} pageCount={pages.length} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
@@ -1562,7 +1583,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <div className="mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} pageCount={publicPages.length} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
@@ -1671,7 +1692,11 @@ export default function Dashboard({ supabase, session }) {
                     )}
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-2">Finds group posts with {groupMinComments}+ comments and {groupMinReactions}+ reactions — perfect for turning into blog content.</p>
+                <p className="text-xs text-slate-400 mt-2">
+                  {groupPages.length > 0 ? (
+                    <>{groupPages.length} group{groupPages.length !== 1 ? 's' : ''} × {groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100} posts each · Est. cost: <span className={`font-medium ${(groupPages.length * (groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100) * 0.0015) > 0.50 ? 'text-amber-500' : 'text-emerald-500'}`}>${(groupPages.length * (groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100) * 0.0015).toFixed(2)}</span></>
+                  ) : 'Add groups to start scanning.'}
+                </p>
               </div>
 
               <ScanSummary status={groupScanStatus} message={groupScanMessage} postCount={groupPosts.length} totalScraped={groupScanStats.totalScraped} filteredOut={groupScanStats.filteredOut} costUsd={groupScanStats.costUsd} />
