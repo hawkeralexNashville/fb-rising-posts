@@ -161,19 +161,46 @@ function PlatformTabs({ selected, onChange }) {
 }
 
 // ─── Scan Controls ───
-function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled, onStop, pageCount, scanType }) {
+function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, onScan, isScanning, disabled, onStop, pageCount, scanType, costRates }) {
   const btnClass = isScanning ? 'bg-orange-100 text-orange-500 border border-orange-200 cursor-not-allowed animate-pulse-glow' : disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white shadow-sm shadow-orange-500/20 hover:shadow-md'
 
-  // Cost estimation
+  // Cost estimation from real data
   const getResultsLimit = (tw, type) => {
     if (type === 'groups') {
       if (tw <= 6) return 30; if (tw <= 12) return 40; if (tw <= 24) return 50; if (tw <= 48) return 75; return 100
     }
     if (tw <= 2) return 5; if (tw <= 6) return 10; if (tw <= 12) return 15; if (tw <= 24) return 20; return 30
   }
+  const getBucketKey = (tw, type) => {
+    if (type === 'groups') {
+      if (tw <= 6) return '6h'; if (tw <= 12) return '12h'; if (tw <= 24) return '24h'; return '48h+'
+    }
+    if (tw <= 2) return '1-2h'; if (tw <= 6) return '6h'; if (tw <= 12) return '12h'; if (tw <= 24) return '24h'; return '48h+'
+  }
+
   const resultsLimit = getResultsLimit(timeWindow, scanType)
-  const costPerResult = scanType === 'groups' ? 0.0015 : 0.0005
-  const estimatedCost = pageCount > 0 ? (pageCount * resultsLimit * costPerResult) : 0
+  const rateType = scanType === 'groups' ? 'groups' : 'pages'
+  const bucketKey = getBucketKey(timeWindow, scanType)
+
+  // Try to get real rate for this bucket, fall back to overall, then to hardcoded default
+  const bucketRate = costRates?.rates?.[rateType]?.[bucketKey]
+  const overallRate = costRates?.overall?.[rateType]
+  const fallbackRate = scanType === 'groups' ? 0.0015 : 0.0005
+
+  let estimatedCost = 0
+  let rateSource = ''
+  if (pageCount > 0) {
+    if (bucketRate) {
+      estimatedCost = bucketRate.avgCostPerPage * pageCount
+      rateSource = `based on ${bucketRate.sampleSize} scan${bucketRate.sampleSize !== 1 ? 's' : ''}`
+    } else if (overallRate) {
+      estimatedCost = overallRate * resultsLimit * pageCount
+      rateSource = 'avg across all scans'
+    } else {
+      estimatedCost = pageCount * resultsLimit * fallbackRate
+      rateSource = 'estimated'
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -205,6 +232,7 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
           <span>{pageCount} page{pageCount !== 1 ? 's' : ''} × {resultsLimit} posts each</span>
           <span>·</span>
           <span className="font-medium text-slate-500">Est. cost: <span className={`${estimatedCost > 0.50 ? 'text-amber-500' : estimatedCost > 0.20 ? 'text-slate-500' : 'text-emerald-500'}`}>${estimatedCost.toFixed(2)}</span></span>
+          {rateSource && <span className="text-slate-300">({rateSource})</span>}
         </div>
       )}
       {!pageCount && <p className="text-xs text-slate-400">Shorter time windows pull fewer posts per page, reducing Apify costs.</p>}
@@ -590,6 +618,7 @@ export default function Dashboard({ supabase, session }) {
   const [quickScanStats, setQuickScanStats] = useState({ totalScraped: 0, filteredOut: 0, costUsd: null })
   const [savedScans, setSavedScans] = useState([])
   const [recentPublicScans, setRecentPublicScans] = useState([])
+  const [costRates, setCostRates] = useState(null)
   const [selectedSavedScan, setSelectedSavedScan] = useState(null)
   const [settings, setSettings] = useState({ min_velocity: 50, min_delta: 20 })
   const [publicStreams, setPublicStreams] = useState([])
@@ -627,7 +656,7 @@ export default function Dashboard({ supabase, session }) {
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans(); loadCostRates() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); return }; loadPages(selectedStreamId); setShowPages(false); setShowAddPage(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
@@ -691,6 +720,7 @@ export default function Dashboard({ supabase, session }) {
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadRecentPublicScans() { const { data } = await supabase.from('saved_scans').select('id, name, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').order('created_at', { ascending: false }).limit(60); setRecentPublicScans(data || []) }
+  async function loadCostRates() { try { const token = (await supabase.auth.getSession()).data.session?.access_token; if (!token) return; const res = await fetch('/api/scan/cost-rates', { headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { const data = await res.json(); setCostRates(data) } } catch(e) { console.error('Failed to load cost rates:', e) } }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
   async function toggleStreamPublic(streamId, isPublic) {
     const displayName = session?.user?.email?.split('@')[0] || 'Anonymous'
@@ -752,7 +782,7 @@ export default function Dashboard({ supabase, session }) {
     const timeLabel = TIME_OPTIONS.find(t => t.value === timeWindow)?.label || `${timeWindow}h`
     const name = `${streamName || source || 'Quick Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
-    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans() }
+    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans(); loadCostRates() }
   }
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setBatchStrategy({ loading: false, strategy: null, error: null }) } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
@@ -1028,7 +1058,7 @@ export default function Dashboard({ supabase, session }) {
     const timeLabel = GROUP_TIME_OPTIONS.find(t => t.value === groupTimeWindow)?.label || `${groupTimeWindow}h`
     const name = `${streamName || 'Group Scan'} — ${timeLabel} — ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: selectedGroupStreamId, name, time_window: groupTimeWindow, min_interactions: groupMinComments, max_interactions: groupMinReactions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0, scan_type: 'groups' }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').single()
-    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans() }
+    if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans(); loadCostRates() }
   }
 
   return (
@@ -1325,7 +1355,7 @@ export default function Dashboard({ supabase, session }) {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{PLATFORMS[quickPlatform].label} URL</label>
                   <input type="text" value={quickUrl} onChange={(e) => setQuickUrl(e.target.value)} placeholder={PLATFORMS[quickPlatform].placeholder} className="w-full max-w-lg px-4 py-3 bg-white border border-slate-300 rounded-xl text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all" />
                 </div>
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} onStop={stopScan} pageCount={quickUrl.trim() ? quickUrl.trim().split('\n').filter(u => u.trim()).length : 0} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startQuickScan} isScanning={isQuickScanning} disabled={!quickUrl.trim()} onStop={stopScan} costRates={costRates} pageCount={quickUrl.trim() ? quickUrl.trim().split('\n').filter(u => u.trim()).length : 0} />
               </form>
 
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
@@ -1481,7 +1511,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <div className="mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} pageCount={pages.length} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} costRates={costRates} pageCount={pages.length} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
@@ -1583,7 +1613,7 @@ export default function Dashboard({ supabase, session }) {
               </div>
 
               <div className="mb-5">
-                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} pageCount={publicPages.length} />
+                <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startPublicStreamScan} isScanning={isScanning} disabled={publicPages.length === 0} onStop={stopScan} costRates={costRates} pageCount={publicPages.length} />
               </div>
 
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
@@ -1693,9 +1723,18 @@ export default function Dashboard({ supabase, session }) {
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">
-                  {groupPages.length > 0 ? (
-                    <>{groupPages.length} group{groupPages.length !== 1 ? 's' : ''} × {groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100} posts each · Est. cost: <span className={`font-medium ${(groupPages.length * (groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100) * 0.0015) > 0.50 ? 'text-amber-500' : 'text-emerald-500'}`}>${(groupPages.length * (groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100) * 0.0015).toFixed(2)}</span></>
-                  ) : 'Add groups to start scanning.'}
+                  {(() => {
+                    if (groupPages.length === 0) return 'Add groups to start scanning.'
+                    const rl = groupTimeWindow <= 6 ? 30 : groupTimeWindow <= 12 ? 40 : groupTimeWindow <= 24 ? 50 : groupTimeWindow <= 48 ? 75 : 100
+                    const bk = groupTimeWindow <= 6 ? '6h' : groupTimeWindow <= 12 ? '12h' : groupTimeWindow <= 24 ? '24h' : '48h+'
+                    const br = costRates?.rates?.groups?.[bk]
+                    const or2 = costRates?.overall?.groups
+                    let est, src
+                    if (br) { est = br.avgCostPerPage * groupPages.length; src = `based on ${br.sampleSize} scan${br.sampleSize !== 1 ? 's' : ''}` }
+                    else if (or2) { est = or2 * rl * groupPages.length; src = 'avg across all scans' }
+                    else { est = groupPages.length * rl * 0.0015; src = 'estimated' }
+                    return <>{groupPages.length} group{groupPages.length !== 1 ? 's' : ''} × {rl} posts each · Est. cost: <span className={`font-medium ${est > 0.50 ? 'text-amber-500' : 'text-emerald-500'}`}>${est.toFixed(2)}</span> <span className="text-slate-300">({src})</span></>
+                  })()}
                 </p>
               </div>
 
