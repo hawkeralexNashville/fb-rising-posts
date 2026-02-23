@@ -191,7 +191,7 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   let rateSource = ''
   if (pageCount > 0) {
     if (bucketRate) {
-      estimatedCost = bucketRate.avgCostPerPage * pageCount
+      estimatedCost = bucketRate.costPerResult * resultsLimit * pageCount
       rateSource = `based on ${bucketRate.sampleSize} scan${bucketRate.sampleSize !== 1 ? 's' : ''}`
     } else if (overallRate) {
       estimatedCost = overallRate * resultsLimit * pageCount
@@ -1730,7 +1730,7 @@ export default function Dashboard({ supabase, session }) {
                     const br = costRates?.rates?.groups?.[bk]
                     const or2 = costRates?.overall?.groups
                     let est, src
-                    if (br) { est = br.avgCostPerPage * groupPages.length; src = `based on ${br.sampleSize} scan${br.sampleSize !== 1 ? 's' : ''}` }
+                    if (br) { est = br.costPerResult * rl * groupPages.length; src = `based on ${br.sampleSize} scan${br.sampleSize !== 1 ? 's' : ''}` }
                     else if (or2) { est = or2 * rl * groupPages.length; src = 'avg across all scans' }
                     else { est = groupPages.length * rl * 0.0015; src = 'estimated' }
                     return <>{groupPages.length} group{groupPages.length !== 1 ? 's' : ''} × {rl} posts each · Est. cost: <span className={`font-medium ${est > 0.50 ? 'text-amber-500' : 'text-emerald-500'}`}>${est.toFixed(2)}</span> <span className="text-slate-300">({src})</span></>

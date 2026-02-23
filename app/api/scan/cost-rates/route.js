@@ -17,7 +17,7 @@ export async function GET(request) {
     // Pull all saved scans that have cost data
     const { data: scans } = await supabase
       .from('saved_scans')
-      .select('cost_usd, total_scraped, time_window, scan_type, stream_id, created_at')
+      .select('cost_usd, total_scraped, time_window, scan_type, created_at')
       .gt('cost_usd', 0)
       .gt('total_scraped', 0)
       .order('created_at', { ascending: false })
@@ -27,22 +27,7 @@ export async function GET(request) {
       return NextResponse.json({ rates: null, scanCount: 0, message: 'No cost data yet' })
     }
 
-    // We need page counts — pull stream page counts for scans that have stream_id
-    const streamIds = [...new Set(scans.filter(s => s.stream_id).map(s => s.stream_id))]
-    let pageCounts = {}
-    if (streamIds.length > 0) {
-      const { data: pages } = await supabase
-        .from('monitored_pages')
-        .select('stream_id')
-        .in('stream_id', streamIds)
-      if (pages) {
-        for (const p of pages) {
-          pageCounts[p.stream_id] = (pageCounts[p.stream_id] || 0) + 1
-        }
-      }
-    }
-
-    // Calculate cost per page per time window bucket
+    // Bucket by time window — use cost_per_result (always accurate, no page count guessing)
     const buckets = {
       pages: { '1-2h': [], '6h': [], '12h': [], '24h': [], '48h+': [] },
       groups: { '6h': [], '12h': [], '24h': [], '48h+': [] },
@@ -65,50 +50,37 @@ export async function GET(request) {
     for (const scan of scans) {
       const type = scan.scan_type === 'groups' ? 'groups' : 'pages'
       const bucket = getBucket(scan.time_window, type)
-      const pageCount = scan.stream_id ? (pageCounts[scan.stream_id] || 1) : 1
-      const costPerPage = scan.cost_usd / pageCount
-
       if (buckets[type][bucket]) {
-        buckets[type][bucket].push({
-          costPerPage,
-          costPerResult: scan.cost_usd / scan.total_scraped,
-          totalCost: scan.cost_usd,
-          pageCount,
-          totalScraped: scan.total_scraped,
-        })
+        buckets[type][bucket].push(scan.cost_usd / scan.total_scraped)
       }
     }
 
-    // Average each bucket
+    // Average cost-per-result for each bucket
     const rates = { pages: {}, groups: {} }
     for (const type of ['pages', 'groups']) {
       for (const [bucket, entries] of Object.entries(buckets[type])) {
         if (entries.length > 0) {
           rates[type][bucket] = {
-            avgCostPerPage: entries.reduce((s, e) => s + e.costPerPage, 0) / entries.length,
-            avgCostPerResult: entries.reduce((s, e) => s + e.costPerResult, 0) / entries.length,
+            costPerResult: entries.reduce((s, v) => s + v, 0) / entries.length,
             sampleSize: entries.length,
           }
         }
       }
     }
 
-    // Also compute an overall fallback rate
+    // Overall fallback
     const allPages = scans.filter(s => s.scan_type !== 'groups')
     const allGroups = scans.filter(s => s.scan_type === 'groups')
-
-    const overallPageRate = allPages.length > 0
-      ? allPages.reduce((s, sc) => s + sc.cost_usd, 0) / allPages.reduce((s, sc) => s + sc.total_scraped, 0)
-      : null
-    const overallGroupRate = allGroups.length > 0
-      ? allGroups.reduce((s, sc) => s + sc.cost_usd, 0) / allGroups.reduce((s, sc) => s + sc.total_scraped, 0)
-      : null
 
     return NextResponse.json({
       rates,
       overall: {
-        pages: overallPageRate,
-        groups: overallGroupRate,
+        pages: allPages.length > 0
+          ? allPages.reduce((s, sc) => s + sc.cost_usd, 0) / allPages.reduce((s, sc) => s + sc.total_scraped, 0)
+          : null,
+        groups: allGroups.length > 0
+          ? allGroups.reduce((s, sc) => s + sc.cost_usd, 0) / allGroups.reduce((s, sc) => s + sc.total_scraped, 0)
+          : null,
       },
       scanCount: scans.length,
     })
