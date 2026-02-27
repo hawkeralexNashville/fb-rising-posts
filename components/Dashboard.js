@@ -546,6 +546,17 @@ function RisingPostsList({ posts, activeProject, session }) {
                 <p className="text-xs leading-relaxed text-orange-700"><span className="font-semibold text-orange-600">⚡ Why this post:</span> {post.reason}</p>
               </div>
             )}
+            {post.relevance_score !== null && post.relevance_score !== undefined && (
+              <div className={`mb-3 rounded-xl px-4 py-2.5 border ${post.relevance_score >= 6 ? 'bg-emerald-50 border-emerald-100' : post.relevance_score >= 4 ? 'bg-amber-50 border-amber-100' : 'bg-red-50 border-red-100'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-sm font-bold ${post.relevance_score >= 6 ? 'text-emerald-600' : post.relevance_score >= 4 ? 'text-amber-600' : 'text-red-500'}`}>
+                    {post.relevance_score >= 8 ? '🎯' : post.relevance_score >= 6 ? '✓' : post.relevance_score >= 4 ? '~' : '✗'} {post.relevance_score}/10
+                  </span>
+                  <span className={`text-xs ${post.relevance_score >= 6 ? 'text-emerald-600' : post.relevance_score >= 4 ? 'text-amber-600' : 'text-red-400'}`}>{post.relevance_reason}</span>
+                </div>
+                {post.relevance_angle && <p className="text-xs text-indigo-600 font-medium">💡 Angle: {post.relevance_angle}</p>}
+              </div>
+            )}
             <div className="flex items-center gap-5 text-sm flex-wrap">
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Total</span><span className="font-semibold text-slate-800">{formatNumber(post.total_interactions)}</span></div>
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Velocity</span><span className="font-semibold text-orange-500">{post.velocity?.toFixed(0) || '—'}/hr</span></div>
@@ -642,6 +653,12 @@ export default function Dashboard({ supabase, session }) {
   const [showNotifSettings, setShowNotifSettings] = useState(false)
   const [notifSaving, setNotifSaving] = useState(false)
   const [sendingNow, setSendingNow] = useState(false)
+  // Relevance scoring state
+  const [relevanceScoring, setRelevanceScoring] = useState(false)
+  const [relevanceStats, setRelevanceStats] = useState(null)
+  const [relevanceFilter, setRelevanceFilter] = useState('all') // all, relevant, irrelevant
+  const [showAudienceProfile, setShowAudienceProfile] = useState(false)
+  const [editingAudienceProfile, setEditingAudienceProfile] = useState('')
   // Group Scanner state
   const [groupStreams, setGroupStreams] = useState([])
   const [selectedGroupStreamId, setSelectedGroupStreamId] = useState(null)
@@ -667,7 +684,7 @@ export default function Dashboard({ supabase, session }) {
   const userId = session?.user?.id
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans(); loadCostRates() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false) }, [selectedStreamId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || '') }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
   useEffect(() => {
@@ -711,6 +728,39 @@ export default function Dashboard({ supabase, session }) {
       else { showToast(data.error || 'Failed to send', 'error') }
     } catch (err) { showToast('Failed to send email', 'error') }
     setSendingNow(false)
+  }
+
+  // Audience profile
+  async function saveAudienceProfile() {
+    if (!selectedStreamId) return
+    await supabase.from('streams').update({ audience_profile: editingAudienceProfile }).eq('id', selectedStreamId)
+    setStreams(streams.map(s => s.id === selectedStreamId ? { ...s, audience_profile: editingAudienceProfile } : s))
+    setShowAudienceProfile(false)
+    showToast('Audience profile saved!')
+  }
+
+  // Relevance scoring
+  async function scoreRelevance(posts) {
+    const stream = streams.find(s => s.id === selectedStreamId)
+    if (!stream?.audience_profile) { showToast('Set an audience profile first', 'error'); setShowAudienceProfile(true); return }
+    setRelevanceScoring(true)
+    setRelevanceStats(null)
+    setRelevanceFilter('all')
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/api/ai/relevance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ posts, audienceProfile: stream.audience_profile }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setRisingPosts(data.posts)
+        setRelevanceStats(data.stats)
+        showToast(`Scored! ${data.stats.relevant} relevant, ${data.stats.irrelevant} filtered out (AI cost: $${data.stats.costEstimate || '?'})`)
+      } else { showToast(data.error || 'Scoring failed', 'error') }
+    } catch (err) { showToast('Relevance scoring failed', 'error') }
+    setRelevanceScoring(false)
   }
 
   // Group stream functions
@@ -1467,8 +1517,9 @@ export default function Dashboard({ supabase, session }) {
         {/* ─── Stream Detail ─── */}
         {view === 'streams' && selectedStream && (() => {
           const streamCategory = selectedStream.category || 'none'
-          const filteredPosts = categoryFilterOn && streamCategory !== 'none' ? risingPosts.filter(p => postMatchesCategory(p, streamCategory)) : risingPosts
-          const hiddenCount = risingPosts.length - filteredPosts.length
+          const categoryFiltered = categoryFilterOn && streamCategory !== 'none' ? risingPosts.filter(p => postMatchesCategory(p, streamCategory)) : risingPosts
+          const filteredPosts = relevanceFilter === 'relevant' ? categoryFiltered.filter(p => p.relevance_score >= 6) : relevanceFilter === 'irrelevant' ? categoryFiltered.filter(p => p.relevance_score !== null && p.relevance_score < 4) : categoryFiltered
+          const hiddenCount = risingPosts.length - categoryFiltered.length
           return (
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 max-w-4xl">
@@ -1632,10 +1683,53 @@ export default function Dashboard({ supabase, session }) {
                 </div>
               )}
 
+              {/* Audience Profile */}
+              <div className="mb-4">
+                <button onClick={() => setShowAudienceProfile(!showAudienceProfile)}
+                  className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl border text-sm font-medium transition-all ${streams.find(s => s.id === selectedStreamId)?.audience_profile ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                  <span>🎯</span>
+                  <span>{streams.find(s => s.id === selectedStreamId)?.audience_profile ? 'Audience profile set' : 'Set audience profile for relevance scoring'}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-auto transition-transform ${showAudienceProfile ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
+                {showAudienceProfile && (
+                  <div className="mt-2 p-5 bg-white border border-slate-200 rounded-xl space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Audience Profile</label>
+                      <p className="text-xs text-slate-400 mb-2">Describe your page, your audience, and what topics are relevant. The AI uses this to score every rising post for relevance.</p>
+                      <textarea value={editingAudienceProfile} onChange={(e) => setEditingAudienceProfile(e.target.value)}
+                        rows={6} placeholder={"Example:\nNashville ToDo is a Nashville lifestyle and entertainment Facebook page with 198K followers.\nCore topics: Nashville restaurants, bars, live music, concerts, local events, tourism, things to do, food & drink trends, Southern lifestyle, local business openings/closings.\nCrossover topics the audience engages with: national entertainment news with Nashville angles, major concert tours, viral food trends, celebrity sightings, travel content about Nashville.\nNOT relevant: national politics, partisan commentary, purely national news with no local hook."}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+                    </div>
+                    <button onClick={saveAudienceProfile} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-lg text-sm font-medium text-white transition-colors">Save Profile</button>
+                  </div>
+                )}
+              </div>
+
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
 
-              {/* Category filter toggle */}
+              {/* Relevance scoring + filter */}
+              {risingPosts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  {!relevanceStats && (
+                    <button onClick={() => scoreRelevance(risingPosts)} disabled={relevanceScoring}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${relevanceScoring ? 'bg-indigo-100 text-indigo-400 border border-indigo-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white shadow-sm shadow-indigo-500/20 hover:shadow-md'}`}>
+                      <span>🎯</span> {relevanceScoring ? 'Scoring relevance…' : `Score Relevance (${risingPosts.length} posts)`}
+                    </button>
+                  )}
+                  {relevanceStats && (
+                    <>
+                      <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2">
+                        <span className="text-xs font-medium text-slate-400">Relevance:</span>
+                        <button onClick={() => setRelevanceFilter('all')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>All ({relevanceStats.total})</button>
+                        <button onClick={() => setRelevanceFilter('relevant')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'relevant' ? 'bg-emerald-500 text-white' : 'text-emerald-600 hover:bg-emerald-50'}`}>✓ Relevant ({relevanceStats.relevant})</button>
+                        <button onClick={() => setRelevanceFilter('irrelevant')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'irrelevant' ? 'bg-red-500 text-white' : 'text-red-500 hover:bg-red-50'}`}>✗ Skip ({relevanceStats.irrelevant})</button>
+                      </div>
+                      <button onClick={() => { setRelevanceStats(null); setRelevanceFilter('all') }} className="text-xs text-slate-400 hover:text-slate-600">Clear scores</button>
+                    </>
+                  )}
+                </div>
+              )}
               {risingPosts.length > 0 && streamCategory !== 'none' && (
                 <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3 mb-4">
                   <div className="flex items-center gap-2">
