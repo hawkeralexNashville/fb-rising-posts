@@ -31,13 +31,17 @@ function escapeHtml(str) {
 
 function buildEmailHtml(streamName, posts, timeWindowHours) {
   const now = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium', timeStyle: 'short' })
-  const postRows = posts.map((p, i) => `
-    <tr style="border-bottom: 1px solid #e2e8f0;">
+  const postRows = posts.map((p, i) => {
+    const isEarly = (p.tags || []).includes('early_riser')
+    const isViral = (p.tags || []).includes('viral')
+    const badge = isEarly ? '<span style="display:inline-block;background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px;">🔥 EARLY RISER</span>' : isViral ? '<span style="display:inline-block;background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px;">⚡ VIRAL</span>' : ''
+    return `
+    <tr style="border-bottom: 1px solid #e2e8f0;${isEarly ? 'background-color:#fffbeb;' : ''}">
       <td style="padding: 16px 12px; vertical-align: top;">
         <div style="font-size: 13px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">#${i + 1}</div>
       </td>
       <td style="padding: 16px 12px; vertical-align: top;">
-        <div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;">${escapeHtml(p.content_preview.slice(0, 200))}${p.content_preview.length > 200 ? '…' : ''}</div>
+        ${badge}<div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;${isEarly ? 'display:inline;' : ''}">${escapeHtml(p.content_preview.slice(0, 200))}${p.content_preview.length > 200 ? '…' : ''}</div>
         <div style="font-size: 12px; color: #94a3b8;">
           ${p.page_name ? `<span style="font-weight: 600;">${escapeHtml(p.page_name)}</span> · ` : ''}
           ${p.post_type ? `${p.post_type} · ` : ''}
@@ -51,7 +55,9 @@ function buildEmailHtml(streamName, posts, timeWindowHours) {
         ${p.velocity ? `<div style="font-size: 13px; font-weight: 600; color: #f97316; margin-top: 4px;">${Math.round(p.velocity).toLocaleString()}/hr</div>` : ''}
       </td>
     </tr>
-  `).join('')
+  `}).join('')
+
+  const earlyCount = posts.filter(p => (p.tags || []).includes('early_riser')).length
 
   return `<!DOCTYPE html>
 <html>
@@ -65,7 +71,7 @@ function buildEmailHtml(streamName, posts, timeWindowHours) {
     <div style="background: white; border-radius: 0 0 16px 16px; border: 1px solid #e2e8f0; border-top: none;">
       <div style="padding: 20px 28px 12px;">
         <p style="margin: 0; font-size: 14px; color: #64748b;">
-          <strong style="color: #f97316;">${posts.length}</strong> rising post${posts.length !== 1 ? 's' : ''} in the last ${timeWindowHours} hours
+          <strong style="color: #f97316;">${posts.length}</strong> rising post${posts.length !== 1 ? 's' : ''} in the last ${timeWindowHours} hours${earlyCount > 0 ? ` · <strong style="color: #d97706;">${earlyCount} early riser${earlyCount !== 1 ? 's' : ''}</strong> — act now` : ''}
         </p>
       </div>
       ${posts.length > 0 ? `<table style="width: 100%; border-collapse: collapse;">${postRows}</table>` : `<div style="padding: 32px 28px; text-align: center; color: #94a3b8;">No rising posts detected in this scan.</div>`}
@@ -139,11 +145,19 @@ export async function POST(request) {
     const dataRes = await fetch(`https://api.apify.com/v2/datasets/${runData.defaultDatasetId}/items?token=${process.env.APIFY_API_TOKEN}&limit=500`)
     const rawPosts = await dataRes.json()
 
-    // Normalize + filter rising
+    // Normalize + filter rising (age-weighted algorithm)
     const normalized = rawPosts.map(p => normalizeFacebookPost(p)).filter(p => p.post_id)
     const nowMs = Date.now()
     const minVelocity = 50
     const rising = []
+
+    function getAgeMultiplier(ageHours) {
+      if (ageHours <= 0.5) return 4.0
+      if (ageHours <= 1) return 3.0
+      if (ageHours <= 2) return 2.0
+      if (ageHours <= 4) return 1.5
+      return 1.0
+    }
 
     for (const post of normalized) {
       let ageHours = null
@@ -155,9 +169,16 @@ export async function POST(request) {
       const velocity = ageHours && ageHours > 0 ? post.total_interactions / ageHours : null
       const isRising = velocity ? velocity >= minVelocity : post.total_interactions >= minVelocity * 2
       if (!isRising) continue
-      rising.push({ ...post, velocity, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null })
+
+      const ageMult = ageHours !== null ? getAgeMultiplier(ageHours) : 1.0
+      const score = (velocity || 0) * ageMult
+      const tags = []
+      if (ageHours !== null && ageHours <= 2 && velocity && velocity >= minVelocity) tags.push('early_riser')
+      if (velocity && velocity >= minVelocity * 5) tags.push('viral')
+
+      rising.push({ ...post, velocity, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null, score: Math.round(score), tags })
     }
-    rising.sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
+    rising.sort((a, b) => (b.score || 0) - (a.score || 0))
 
     // Send email via SendGrid
     const subject = `📈 ${streamName}: ${rising.length} rising post${rising.length !== 1 ? 's' : ''}`

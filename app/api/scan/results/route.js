@@ -142,10 +142,19 @@ export async function GET(request) {
       await supabase.from('post_snapshots').insert(snapshotsToInsert.slice(i, i + 50))
     }
 
-    // Filter and score
+    // Filter and score — age-weighted algorithm
     const risingPosts = []
     const nowMs = Date.now()
     let filteredOut = 0
+
+    // Age multiplier: younger posts get boosted because early detection is the goal
+    function getAgeMultiplier(ageHours) {
+      if (ageHours <= 0.5) return 4.0    // Under 30 min — extremely early signal
+      if (ageHours <= 1) return 3.0      // Under 1 hour — very early
+      if (ageHours <= 2) return 2.0      // Under 2 hours — early riser window
+      if (ageHours <= 4) return 1.5      // 2-4 hours — still actionable
+      return 1.0                          // 4+ hours — standard
+    }
 
     for (const post of normalizedPosts) {
       let ageHours = null
@@ -160,11 +169,16 @@ export async function GET(request) {
       const velocity = ageHours && ageHours > 0 ? post.total_interactions / ageHours : null
       const prev = prevMap[post.post_id]
       let delta = null
-      if (prev) delta = post.total_interactions - prev.total_interactions
+      let deltaRate = null
+      if (prev) {
+        delta = post.total_interactions - prev.total_interactions
+        const timeSinceLast = prev.scraped_at ? (nowMs - new Date(prev.scraped_at).getTime()) / 3600000 : null
+        if (timeSinceLast && timeSinceLast > 0) deltaRate = delta / timeSinceLast
+      }
 
       let isRising = false
       let reason = ''
-      const fmtAge = ageHours !== null ? (ageHours < 1 ? Math.round(ageHours * 60) + ' minutes' : ageHours < 2 ? '1 hour' : Math.round(ageHours) + ' hours') : null
+      const fmtAge = ageHours !== null ? (ageHours < 0.5 ? Math.round(ageHours * 60) + ' minutes' : ageHours < 1 ? Math.round(ageHours * 60) + ' minutes' : ageHours < 2 ? '1 hour' : Math.round(ageHours) + ' hours') : null
       const fmtInt = (n) => n.toLocaleString()
 
       if (prev && delta !== null) { 
@@ -172,32 +186,46 @@ export async function GET(request) {
         if (isRising) {
           const timeSinceLast = prev.scraped_at ? Math.round((nowMs - new Date(prev.scraped_at).getTime()) / 60000) : null
           const timeSinceStr = timeSinceLast ? (timeSinceLast < 60 ? `${timeSinceLast} minutes` : `${Math.round(timeSinceLast / 60)} hours`) : null
-          const deltaRate = timeSinceLast && timeSinceLast > 0 ? Math.round(delta / (timeSinceLast / 60)) : null
-          reason = `This post had ${fmtInt(prev.total_interactions)} interactions when we last scanned${timeSinceStr ? ` ${timeSinceStr} ago` : ''} and now has ${fmtInt(post.total_interactions)} — that's a jump of +${fmtInt(delta)}${deltaRate ? ` (roughly ${fmtInt(deltaRate)}/hr)` : ''}. Your threshold is ${settings.min_delta}+ growth between scans, so this qualifies as a fast riser.`
+          const fmtDeltaRate = deltaRate ? Math.round(deltaRate) : null
+          reason = `This post had ${fmtInt(prev.total_interactions)} interactions when we last scanned${timeSinceStr ? ` ${timeSinceStr} ago` : ''} and now has ${fmtInt(post.total_interactions)} — that's a jump of +${fmtInt(delta)}${fmtDeltaRate ? ` (roughly ${fmtInt(fmtDeltaRate)}/hr)` : ''}.`
         }
       }
       else if (velocity !== null) { 
         isRising = velocity >= settings.min_velocity
         if (isRising) {
           const velRound = Math.round(velocity)
-          const multiplier = Math.round(velocity / settings.min_velocity * 10) / 10
-          reason = `Posted ${fmtAge} ago with ${fmtInt(post.total_interactions)} total interactions, giving it a velocity of ${fmtInt(velRound)} interactions per hour. That's ${multiplier > 1.5 ? multiplier + 'x' : 'above'} your minimum velocity threshold of ${settings.min_velocity}/hr — this is picking up traction fast for its age.`
+          reason = `Posted ${fmtAge} ago with ${fmtInt(post.total_interactions)} total interactions — velocity of ${fmtInt(velRound)} interactions/hr.`
         }
       }
       else { 
         isRising = post.total_interactions >= settings.min_velocity * 2
-        if (isRising) reason = `This post has ${fmtInt(post.total_interactions)} interactions but no timestamp available, so we can't calculate velocity. It exceeds the high-volume threshold of ${fmtInt(settings.min_velocity * 2)} interactions, so it's flagged as potentially rising.`
+        if (isRising) reason = `This post has ${fmtInt(post.total_interactions)} interactions (no timestamp available). Exceeds the high-volume threshold.`
       }
 
       if (!isRising) { filteredOut++; continue }
-      risingPosts.push({ ...post, velocity, delta, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null, reason })
+
+      // Age-weighted score for ranking
+      const ageMult = ageHours !== null ? getAgeMultiplier(ageHours) : 1.0
+      const score = ((velocity || 0) * ageMult) + ((deltaRate || delta || 0) * 2)
+
+      // Tag early risers and surging posts
+      const tags = []
+      if (ageHours !== null && ageHours <= 2 && velocity && velocity >= settings.min_velocity) {
+        tags.push('early_riser')
+        reason = `🔥 EARLY RISER — Only ${fmtAge} old and already at ${fmtInt(post.total_interactions)} interactions (${fmtInt(Math.round(velocity))}/hr). ${reason}`
+      }
+      if (deltaRate && deltaRate > (velocity || 0) * 1.5) {
+        tags.push('accelerating')
+      }
+      if (velocity && velocity >= settings.min_velocity * 5) {
+        tags.push('viral')
+      }
+
+      risingPosts.push({ ...post, velocity, delta, deltaRate: deltaRate ? Math.round(deltaRate) : null, age_hours: ageHours ? Math.round(ageHours * 10) / 10 : null, reason, score: Math.round(score), tags, age_multiplier: ageMult })
     }
 
-    risingPosts.sort((a, b) => {
-      const aScore = (a.velocity || 0) + (a.delta || 0) * 2
-      const bScore = (b.velocity || 0) + (b.delta || 0) * 2
-      return bScore - aScore
-    })
+    // Sort by score — young + fast posts rise to the top
+    risingPosts.sort((a, b) => (b.score || 0) - (a.score || 0))
 
     return NextResponse.json({ posts: risingPosts, totalScraped, filteredOut, costUsd })
   } catch (err) {

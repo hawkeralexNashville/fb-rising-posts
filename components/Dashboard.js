@@ -526,14 +526,17 @@ function RisingPostsList({ posts, activeProject, session }) {
         const m3Val = Object.values(metrics)[2] || 0
         const strat = strategies[post.post_id]
         return (
-          <div key={post.post_id || i} className="bg-white border border-slate-200 rounded-2xl p-5 animate-slide-up hover:border-slate-300 transition-colors" style={{ animationDelay: `${i * 50}ms` }}>
+          <div key={post.post_id || i} className={`bg-white border rounded-2xl p-5 animate-slide-up hover:border-slate-300 transition-colors ${(post.tags || []).includes('early_riser') ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/30' : 'border-slate-200'}`} style={{ animationDelay: `${i * 50}ms` }}>
             <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 <span className="text-base shrink-0" title={p.label}>{p.icon}</span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{post.page_name || 'Unknown'}</span>
                 {post.posted_at && <span className="text-xs text-slate-400">{timeAgo(post.posted_at)}</span>}
                 {post.age_hours && <span className="text-xs text-slate-300">({post.age_hours}h old)</span>}
                 {post.post_type && <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{post.post_type}</span>}
+                {(post.tags || []).includes('early_riser') && <span className="text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-2.5 py-0.5">🔥 Early Riser</span>}
+                {(post.tags || []).includes('viral') && <span className="text-xs font-bold bg-red-100 text-red-600 border border-red-200 rounded-full px-2.5 py-0.5">⚡ Viral</span>}
+                {(post.tags || []).includes('accelerating') && <span className="text-xs font-bold bg-blue-100 text-blue-600 border border-blue-200 rounded-full px-2.5 py-0.5">📈 Accelerating</span>}
               </div>
               {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-orange-500 transition-colors">{Icons.link}</a>}
             </div>
@@ -543,10 +546,12 @@ function RisingPostsList({ posts, activeProject, session }) {
                 <p className="text-xs leading-relaxed text-orange-700"><span className="font-semibold text-orange-600">⚡ Why this post:</span> {post.reason}</p>
               </div>
             )}
-            <div className="flex items-center gap-5 text-sm">
+            <div className="flex items-center gap-5 text-sm flex-wrap">
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Total</span><span className="font-semibold text-slate-800">{formatNumber(post.total_interactions)}</span></div>
               <div className="flex items-center gap-1.5"><span className="text-slate-400">Velocity</span><span className="font-semibold text-orange-500">{post.velocity?.toFixed(0) || '—'}/hr</span></div>
               {post.delta !== null && post.delta !== undefined && <div className="flex items-center gap-1.5"><span className="text-slate-400">Delta</span><span className="font-semibold text-orange-500">+{post.delta}</span></div>}
+              {post.deltaRate && <div className="flex items-center gap-1.5"><span className="text-slate-400">Δ Rate</span><span className="font-semibold text-orange-500">{post.deltaRate}/hr</span></div>}
+              {post.score && <div className="flex items-center gap-1.5"><span className="text-slate-400">Score</span><span className="font-semibold text-violet-500">{post.score}</span>{post.age_multiplier > 1 && <span className="text-xs text-violet-400">({post.age_multiplier}x boost)</span>}</div>}
               <div className="flex items-center gap-3 ml-auto text-slate-400 text-xs">
                 <span>{labels.m1} {formatNumber(m1Val)}</span>
                 <span>{labels.m2} {formatNumber(m2Val)}</span>
