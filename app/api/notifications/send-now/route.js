@@ -35,19 +35,23 @@ function buildEmailHtml(streamName, posts, timeWindowHours) {
     const isEarly = (p.tags || []).includes('early_riser')
     const isViral = (p.tags || []).includes('viral')
     const badge = isEarly ? '<span style="display:inline-block;background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px;">🔥 EARLY RISER</span>' : isViral ? '<span style="display:inline-block;background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px;">⚡ VIRAL</span>' : ''
+    const relevanceBadge = p.relevance_score ? `<span style="display:inline-block;background:${p.relevance_score >= 8 ? '#dcfce7' : '#dbeafe'};color:${p.relevance_score >= 8 ? '#16a34a' : '#2563eb'};font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px;">🎯 ${p.relevance_score}/10</span>` : ''
+    const angleHtml = p.relevance_angle ? `<div style="margin-top: 6px; padding: 6px 10px; background: #eef2ff; border-radius: 6px; font-size: 12px; color: #4338ca;">💡 <strong>Angle:</strong> ${escapeHtml(p.relevance_angle)}</div>` : ''
     return `
     <tr style="border-bottom: 1px solid #e2e8f0;${isEarly ? 'background-color:#fffbeb;' : ''}">
       <td style="padding: 16px 12px; vertical-align: top;">
         <div style="font-size: 13px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">#${i + 1}</div>
       </td>
       <td style="padding: 16px 12px; vertical-align: top;">
-        ${badge}<div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;${isEarly ? 'display:inline;' : ''}">${escapeHtml(p.content_preview.slice(0, 200))}${p.content_preview.length > 200 ? '…' : ''}</div>
+        ${badge}${relevanceBadge}<div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;${badge || relevanceBadge ? 'display:inline;' : ''}">${escapeHtml(p.content_preview.slice(0, 200))}${p.content_preview.length > 200 ? '…' : ''}</div>
         <div style="font-size: 12px; color: #94a3b8;">
           ${p.page_name ? `<span style="font-weight: 600;">${escapeHtml(p.page_name)}</span> · ` : ''}
           ${p.post_type ? `${p.post_type} · ` : ''}
           ${p.age_hours ? `${p.age_hours}h old` : ''}
+          ${p.relevance_reason ? ` · <span style="color: #6366f1;">${escapeHtml(p.relevance_reason)}</span>` : ''}
         </div>
         ${p.post_url ? `<div style="margin-top: 6px;"><a href="${p.post_url}" style="color: #f97316; font-size: 12px; text-decoration: none;">View post →</a></div>` : ''}
+        ${angleHtml}
       </td>
       <td style="padding: 16px 12px; vertical-align: top; text-align: right; white-space: nowrap;">
         <div style="font-size: 20px; font-weight: 700; color: #1e293b;">${p.total_interactions.toLocaleString()}</div>
@@ -100,9 +104,10 @@ export async function POST(request) {
     const { streamId, emails, timeWindowHours, minInteractions } = await request.json()
     if (!streamId || !emails?.length) return NextResponse.json({ error: 'Missing streamId or emails' }, { status: 400 })
 
-    // Get stream name
-    const { data: stream } = await supabase.from('streams').select('name').eq('id', streamId).single()
+    // Get stream name + audience profile
+    const { data: stream } = await supabase.from('streams').select('name, audience_profile').eq('id', streamId).single()
     const streamName = stream?.name || 'Unknown Stream'
+    const audienceProfile = stream?.audience_profile || null
 
     // Get pages
     const { data: pages } = await supabase.from('monitored_pages').select('url').eq('stream_id', streamId)
@@ -180,9 +185,62 @@ export async function POST(request) {
     }
     rising.sort((a, b) => (b.score || 0) - (a.score || 0))
 
+    // AI relevance scoring — filter to relevant posts only
+    let emailPosts = rising
+    let relevanceFiltered = 0
+    if (audienceProfile && rising.length > 0 && process.env.OPENAI_API_KEY) {
+      try {
+        const postSummaries = rising.slice(0, 30).map((p, i) => (
+          `[${i}] ${p.page_name ? p.page_name + ': ' : ''}${(p.content_preview || '').slice(0, 200)}`
+        )).join('\n')
+
+        const prompt = `You are a relevance filter for a specific Facebook page and its audience.
+
+ABOUT THE PAGE:
+${audienceProfile}
+
+TASK: Score each post below from 1-10 for how relevant it is to this page's audience.
+Score guide:
+- 8-10: Perfect fit. Direct match to core topics.
+- 6-7: Good crossover. The audience would engage with this.
+- 4-5: Weak connection. Probably not worth posting about.
+- 1-3: Not relevant. Skip entirely.
+
+POSTS TO SCORE:
+${postSummaries}
+
+Respond ONLY with valid JSON array. No markdown, no backticks.
+Each item: {"i": post_index, "s": score_1_to_10, "r": "one line reason", "a": "suggested angle if score >= 6, otherwise null"}`
+
+        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 3000, temperature: 0.3 }),
+        })
+
+        if (aiRes.ok) {
+          const aiData = await aiRes.json()
+          const raw = aiData.choices?.[0]?.message?.content || '[]'
+          const cleaned = raw.replace(/```json\s*/g, '').replace(/```/g, '').trim()
+          const scores = JSON.parse(cleaned)
+
+          // Attach scores and filter
+          const scored = rising.map((post, i) => {
+            const s = scores.find(x => x.i === i)
+            return { ...post, relevance_score: s?.s ?? null, relevance_reason: s?.r ?? null, relevance_angle: s?.a ?? null }
+          })
+          emailPosts = scored.filter(p => p.relevance_score === null || p.relevance_score >= 6)
+          relevanceFiltered = rising.length - emailPosts.length
+          console.log(`Relevance: ${emailPosts.length} relevant, ${relevanceFiltered} filtered out`)
+        }
+      } catch (err) {
+        console.error('Relevance scoring failed, sending all posts:', err.message)
+      }
+    }
+
     // Send email via SendGrid
-    const subject = `📈 ${streamName}: ${rising.length} rising post${rising.length !== 1 ? 's' : ''}`
-    const html = buildEmailHtml(streamName, rising, timeWindowHours)
+    const subject = `📈 ${streamName}: ${emailPosts.length} rising post${emailPosts.length !== 1 ? 's' : ''}${relevanceFiltered > 0 ? ` (${relevanceFiltered} irrelevant filtered)` : ''}`
+    const html = buildEmailHtml(streamName, emailPosts, timeWindowHours)
 
     const sgRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -206,7 +264,9 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      risingCount: rising.length,
+      risingCount: emailPosts.length,
+      totalRising: rising.length,
+      relevanceFiltered,
       totalScraped: normalized.length,
       emailsSentTo: emails,
       costUsd: runData.usageTotalUsd ?? 0,

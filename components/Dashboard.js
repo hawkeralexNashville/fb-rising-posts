@@ -724,7 +724,7 @@ export default function Dashboard({ supabase, session }) {
         body: JSON.stringify({ streamId: selectedStreamId, emails: notifSettings.emails, timeWindowHours: notifSettings.time_window_hours, minInteractions: notifSettings.min_interactions }),
       })
       const data = await res.json()
-      if (res.ok) { showToast(`Email sent! ${data.risingCount} rising posts found. Cost: $${data.costUsd?.toFixed(4) || '0'}`) }
+      if (res.ok) { showToast(`Email sent! ${data.risingCount} relevant posts${data.relevanceFiltered ? ` (${data.relevanceFiltered} irrelevant filtered out)` : ''}. Cost: $${data.costUsd?.toFixed(4) || '0'}`) }
       else { showToast(data.error || 'Failed to send', 'error') }
     } catch (err) { showToast('Failed to send email', 'error') }
     setSendingNow(false)
