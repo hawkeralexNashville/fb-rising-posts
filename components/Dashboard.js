@@ -698,11 +698,11 @@ export default function Dashboard({ supabase, session }) {
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
   async function loadNotifSettings(streamId) {
     const { data } = await supabase.from('stream_notifications').select('*').eq('stream_id', streamId).eq('user_id', userId).single()
-    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [] })
+    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [] })
   }
   async function saveNotifSettings(updated) {
     setNotifSaving(true)
-    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, updated_at: new Date().toISOString() }
+    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], updated_at: new Date().toISOString() }
     const { data: existing } = await supabase.from('stream_notifications').select('id').eq('stream_id', selectedStreamId).eq('user_id', userId).single()
     if (existing) {
       await supabase.from('stream_notifications').update(payload).eq('id', existing.id)
@@ -1614,7 +1614,7 @@ export default function Dashboard({ supabase, session }) {
                   <button onClick={() => setShowNotifSettings(!showNotifSettings)}
                     className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl border text-sm font-medium transition-all ${notifSettings.enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
                     <span>{notifSettings.enabled ? '🔔' : '🔕'}</span>
-                    <span>{notifSettings.enabled ? `Auto-report every ${notifSettings.frequency_hours}h → ${(notifSettings.emails || []).join(', ') || 'no emails set'}` : 'Email notifications off'}</span>
+                    <span>{notifSettings.enabled ? `Sends at ${(notifSettings.send_times || []).join(', ') || 'no times set'} CST → ${(notifSettings.emails || []).join(', ') || 'no emails set'}` : 'Email notifications off'}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-auto transition-transform ${showNotifSettings ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
                   </button>
                   {showNotifSettings && (
@@ -1622,26 +1622,26 @@ export default function Dashboard({ supabase, session }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-slate-700">Automatic Email Reports</div>
-                          <div className="text-xs text-slate-400 mt-0.5">Runs a scan and emails rising posts on a schedule</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Runs a scan and emails rising posts at specific times (CST)</div>
                         </div>
                         <button onClick={() => { const updated = { ...notifSettings, enabled: !notifSettings.enabled }; saveNotifSettings(updated) }}
                           className={`relative w-11 h-6 rounded-full transition-colors ${notifSettings.enabled ? 'bg-emerald-500' : 'bg-slate-200'}`}>
                           <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifSettings.enabled ? 'left-6' : 'left-1'}`} />
                         </button>
                       </div>
-                      <div className="flex flex-wrap gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Frequency</label>
-                          <select value={notifSettings.frequency_hours} onChange={(e) => setNotifSettings({ ...notifSettings, frequency_hours: parseInt(e.target.value) })}
-                            className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer pr-8" style={selectStyle}>
-                            <option value={1}>Every 1 hour</option>
-                            <option value={2}>Every 2 hours</option>
-                            <option value={4}>Every 4 hours</option>
-                            <option value={6}>Every 6 hours</option>
-                            <option value={12}>Every 12 hours</option>
-                            <option value={24}>Once daily</option>
-                          </select>
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Send Times (CST)</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {['6:00 AM', '8:00 AM', '10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM', '6:00 PM', '8:00 PM'].map(t => {
+                            const times = notifSettings.send_times || []
+                            const active = times.includes(t)
+                            return <button key={t} onClick={() => setNotifSettings({ ...notifSettings, send_times: active ? times.filter(x => x !== t) : [...times, t].sort((a, b) => { const toMin = s => { const [h, mp] = s.split(':'); const [m, p] = mp.split(' '); return (p === 'PM' && parseInt(h) !== 12 ? parseInt(h) + 12 : p === 'AM' && parseInt(h) === 12 ? 0 : parseInt(h)) * 60 + parseInt(m) }; return toMin(a) - toMin(b) }) })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${active ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{t}</button>
+                          })}
                         </div>
+                        <p className="text-xs text-slate-400">{(notifSettings.send_times || []).length === 0 ? 'Click times above to select when to receive reports' : `Selected: ${(notifSettings.send_times || []).join(', ')} CST`}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Time Window</label>
                           <select value={notifSettings.time_window_hours} onChange={(e) => setNotifSettings({ ...notifSettings, time_window_hours: parseInt(e.target.value) })}

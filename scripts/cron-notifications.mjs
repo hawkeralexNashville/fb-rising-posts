@@ -37,18 +37,48 @@ async function supabaseQuery(path, opts = {}) {
 }
 
 // ─── Get due notifications ───
+function parseTimeToHour(timeStr) {
+  // Parse "8:00 AM" -> 8, "2:00 PM" -> 14, "12:00 PM" -> 12, "12:00 AM" -> 0
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (!match) return null
+  let h = parseInt(match[1])
+  const p = match[3].toUpperCase()
+  if (p === 'PM' && h !== 12) h += 12
+  if (p === 'AM' && h === 12) h = 0
+  return h
+}
+
 async function getDueNotifications() {
-  const now = new Date()
-  // Get all enabled notifications
+  // Get current hour in CST (America/Chicago)
+  const nowCST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+  const currentHour = nowCST.getHours()
+  console.log(`Current CST hour: ${currentHour} (${nowCST.toLocaleString('en-US', { timeZone: 'America/Chicago' })})`)
+
   const notifs = await supabaseQuery(
     'stream_notifications?enabled=eq.true&select=*'
   )
-  // Filter to ones that are due
+
   return notifs.filter(n => {
+    const sendTimes = n.send_times || []
+
+    // New mode: specific send times
+    if (sendTimes.length > 0) {
+      const matchesHour = sendTimes.some(t => parseTimeToHour(t) === currentHour)
+      if (!matchesHour) return false
+      // Don't send twice in the same hour
+      if (n.last_sent_at) {
+        const lastCST = new Date(new Date(n.last_sent_at).toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+        if (lastCST.getHours() === currentHour && 
+            lastCST.toDateString() === nowCST.toDateString()) return false
+      }
+      return true
+    }
+
+    // Legacy mode: frequency_hours (backward compat)
     if (!n.last_sent_at) return true
     const lastSent = new Date(n.last_sent_at)
     const nextDue = new Date(lastSent.getTime() + n.frequency_hours * 3600000)
-    return now >= nextDue
+    return new Date() >= nextDue
   })
 }
 
