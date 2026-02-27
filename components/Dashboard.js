@@ -636,6 +636,7 @@ export default function Dashboard({ supabase, session }) {
   const [notifSettings, setNotifSettings] = useState(null)
   const [showNotifSettings, setShowNotifSettings] = useState(false)
   const [notifSaving, setNotifSaving] = useState(false)
+  const [sendingNow, setSendingNow] = useState(false)
   // Group Scanner state
   const [groupStreams, setGroupStreams] = useState([])
   const [selectedGroupStreamId, setSelectedGroupStreamId] = useState(null)
@@ -689,6 +690,22 @@ export default function Dashboard({ supabase, session }) {
     setNotifSettings(updated)
     setNotifSaving(false)
     showToast('Notification settings saved!')
+  }
+  async function sendNotifNow() {
+    if (!notifSettings?.emails?.length) { showToast('Add at least one email first', 'error'); return }
+    setSendingNow(true)
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/api/notifications/send-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ streamId: selectedStreamId, emails: notifSettings.emails, timeWindowHours: notifSettings.time_window_hours, minInteractions: notifSettings.min_interactions }),
+      })
+      const data = await res.json()
+      if (res.ok) { showToast(`Email sent! ${data.risingCount} rising posts found. Cost: $${data.costUsd?.toFixed(4) || '0'}`) }
+      else { showToast(data.error || 'Failed to send', 'error') }
+    } catch (err) { showToast('Failed to send email', 'error') }
+    setSendingNow(false)
   }
 
   // Group stream functions
@@ -1592,6 +1609,14 @@ export default function Dashboard({ supabase, session }) {
                         <button onClick={() => saveNotifSettings(notifSettings)} disabled={notifSaving}
                           className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 rounded-lg text-sm font-medium text-white transition-colors">
                           {notifSaving ? 'Saving...' : 'Save Settings'}
+                        </button>
+                        <button onClick={sendNotifNow} disabled={sendingNow || !notifSettings?.emails?.length}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium text-white transition-colors">
+                          {sendingNow ? (
+                            <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Scanning &amp; Sending…</>
+                          ) : (
+                            <><span>📧</span> Scan &amp; Send Now</>
+                          )}
                         </button>
                         {notifSettings.last_sent_at && (
                           <span className="text-xs text-slate-400">Last sent: {new Date(notifSettings.last_sent_at).toLocaleString()}</span>
