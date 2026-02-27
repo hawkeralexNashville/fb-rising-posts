@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 
-export default function Auth({ supabase, initialMode = 'login', onBack }) {
+export default function Auth({ supabase, initialMode = 'login' }) {
   const [mode, setMode] = useState(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,15 +24,6 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
       } else {
         setMessage('Password reset link sent! Check your email.')
       }
-    } else if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setError(error.message)
-      } else {
-        setMessage('Account created! Check your email to confirm, then sign in.')
-        setMode('login')
-        setPassword('')
-      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
@@ -45,14 +36,6 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
       <div className="w-full max-w-md">
-        {/* Back to homepage */}
-        {onBack && (
-          <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-8">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-            Back to homepage
-          </button>
-        )}
-
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 sm:p-10">
           {/* Logo / Title */}
           <div className="text-center mb-8">
@@ -63,10 +46,10 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
               </svg>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Reset your password'}
+              {mode === 'login' ? 'Rising Posts' : 'Reset your password'}
             </h1>
             <p className="text-slate-500 mt-2 text-base">
-              {mode === 'login' ? 'Sign in to your Rising Posts account' : mode === 'signup' ? 'Start finding trending content today' : 'Enter your email and we\'ll send you a reset link'}
+              {mode === 'login' ? 'Sign in to your account' : 'Enter your email and we\'ll send you a reset link'}
             </p>
           </div>
 
@@ -87,15 +70,6 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-slate-700">Password</label>
-                  {mode === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('forgot'); setError(null); setMessage(null) }}
-                      className="text-xs text-orange-500 hover:text-orange-600 font-medium transition-colors"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
                 </div>
                 <input
                   type="password"
@@ -121,23 +95,14 @@ export default function Auth({ supabase, initialMode = 'login', onBack }) {
               disabled={loading}
               className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-base font-semibold text-white shadow-sm shadow-orange-500/20 transition-all hover:shadow-md"
             >
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
+              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Send Reset Link'}
             </button>
           </form>
 
           {/* Toggle mode */}
           <p className="text-center text-sm text-slate-500 mt-6">
             {mode === 'login' && (
-              <>
-                Don&apos;t have an account?{' '}
-                <button onClick={() => { setMode('signup'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Sign up</button>
-              </>
-            )}
-            {mode === 'signup' && (
-              <>
-                Already have an account?{' '}
-                <button onClick={() => { setMode('login'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Sign in</button>
-              </>
+              <button onClick={() => { setMode('forgot'); setError(null); setMessage(null) }} className="text-orange-500 hover:text-orange-600 font-medium transition-colors">Forgot password?</button>
             )}
             {mode === 'forgot' && (
               <>
