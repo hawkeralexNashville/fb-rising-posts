@@ -240,280 +240,9 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
   )
 }
 
-// ─── Batch Strategy Panel ───
-function BatchStrategyPanel({ strategy, loading, error, posts }) {
-  const [copiedId, setCopiedId] = useState(null)
-  const [expandedMoves, setExpandedMoves] = useState({})
-  const copyText = (text, id) => { navigator.clipboard.writeText((text || '').replace(/\\n/g, '\n')); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }
-  const toggleMove = (key) => setExpandedMoves(prev => ({ ...prev, [key]: prev[key] === undefined ? false : !prev[key] }))
-
-  if (loading) return (
-    <div className="bg-violet-500/10 border border-violet-500/30 rounded-2xl p-6 mb-5 animate-pulse">
-      <div className="flex items-center gap-3"><span className="text-xl">⚡</span><span className="text-base font-semibold text-violet-400">Analyzing {posts?.length || 0} trending posts…</span></div>
-      <p className="text-sm text-violet-500 mt-2">Building exploitation strategies. 15-30 seconds.</p>
-    </div>
-  )
-  if (error) return <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 mb-5"><p className="text-sm text-red-400">{error}</p></div>
-  if (!strategy?.opportunities?.length) return null
-
-  const purposeStyle = {
-    'momentum': { color: 'bg-orange-500/20 text-orange-400 border-orange-500/40', icon: '🚀' },
-    'debate': { color: 'bg-blue-500/20 text-blue-400 border-blue-500/40', icon: '💬' },
-    'authority': { color: 'bg-purple-500/20 text-purple-400 border-purple-500/40', icon: '🏛️' },
-    'traffic': { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40', icon: '🔗' },
-    'viral': { color: 'bg-pink-500/20 text-pink-400 border-pink-500/40', icon: '🔥' },
-    'engagement': { color: 'bg-amber-500/20 text-amber-400 border-amber-500/40', icon: '💬' },
-    'breaking': { color: 'bg-red-500/20 text-red-400 border-red-500/40', icon: '⚡' },
-  }
-  const leverColor = {
-    'anger': 'text-red-500', 'outrage': 'text-red-500', 'fear': 'text-amber-600', 'wallet pain': 'text-emerald-600',
-    'curiosity': 'text-blue-500', 'identity': 'text-purple-500', 'aspiration': 'text-teal-500', 'hope': 'text-emerald-500',
-    'nostalgia': 'text-amber-500',
-  }
-  const CopyBtn = ({ text, id, label }) => (
-    <button onClick={() => copyText(text, id)}
-      className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${copiedId === id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-800 text-gray-500 hover:text-violet-400 hover:bg-violet-500/10'}`}>
-      {copiedId === id ? '✓ Copied' : label || 'Copy'}
-    </button>
-  )
-
-  return (
-    <div className="mb-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">⚡</span>
-        <h3 className="text-lg font-bold text-white">Strategic Opportunities</h3>
-        <span className="text-xs text-gray-400 bg-gray-800 rounded-full px-2.5 py-0.5">{strategy.opportunities.length} found</span>
-      </div>
-
-      {/* Skip list */}
-      {strategy.skip?.length > 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Not Worth Exploiting</p>
-          {strategy.skip.map((s, i) => <p key={i} className="text-sm text-gray-400 mb-1 last:mb-0">🚫 {s}</p>)}
-        </div>
-      )}
-
-      {/* Opportunities */}
-      {strategy.opportunities.map((opp, oi) => (
-        <div key={oi} className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
-          {/* Opportunity header */}
-          <div className="px-5 py-4 border-b border-gray-800">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-gray-600">#{opp.order || oi + 1}</span>
-                {opp.emotional_lever && <span className={`text-xs font-bold uppercase ${leverColor[opp.emotional_lever] || 'text-gray-500'}`}>{opp.emotional_lever}</span>}
-                {opp.move_type && <span className="text-xs text-gray-400 bg-gray-800 rounded-full px-2 py-0.5">{opp.move_type}</span>}
-              </div>
-            </div>
-            {opp.source_summary && <p className="text-sm text-gray-300 mb-1.5">{opp.source_summary}</p>}
-            {opp.why_its_working && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-                <p className="text-xs text-amber-300"><span className="font-semibold">🧠 Why it's working:</span> {opp.why_its_working}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Moves */}
-          <div className="divide-y divide-gray-800">
-            {(opp.moves || []).map((move, mi) => {
-              const moveKey = `${oi}-${mi}`
-              const isExpanded = expandedMoves[moveKey] !== false
-              const ps = purposeStyle[move.purpose] || { color: 'bg-gray-800 text-gray-400 border-gray-700', icon: '📝' }
-              const c = move.creative || {}
-              const displayBody = (c.body || '').replace(/\\n/g, '\n')
-              return (
-                <div key={mi} className="px-5 py-4">
-                  <button onClick={() => toggleMove(moveKey)} className="w-full flex items-center justify-between mb-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-violet-400 bg-violet-500/20 px-2 py-0.5 rounded">{move.strategy}</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${ps.color}`}>{ps.icon} {move.purpose}</span>
-                      {move.format && <span className="text-xs text-gray-400 bg-gray-800 border border-gray-700 px-2 py-0.5 rounded-full">{move.format}</span>}
-                    </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-                  </button>
-                  {move.why_this_works && <p className="text-xs text-gray-500 mt-1 mb-2 italic">{move.why_this_works}</p>}
-
-                  {isExpanded && (
-                    <div className="mt-3 space-y-3">
-                      {/* Headline */}
-                      {c.headline && (
-                        <div className="flex items-start justify-between gap-2 bg-gray-800 rounded-xl px-4 py-3">
-                          <div>
-                            <p className="text-base font-bold text-white">{c.headline}</p>
-                            {c.subheadline && <p className="text-sm text-gray-400 mt-0.5">{c.subheadline}</p>}
-                          </div>
-                          <CopyBtn text={c.headline + (c.subheadline ? '\n' + c.subheadline : '')} id={`h-${moveKey}`} />
-                        </div>
-                      )}
-
-                      {/* Visual direction */}
-                      {c.visual_direction && (
-                        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl px-4 py-2.5">
-                          <p className="text-xs text-indigo-400"><span className="font-semibold">🎨 Visual:</span> {c.visual_direction}</p>
-                        </div>
-                      )}
-
-                      {/* Body / copy */}
-                      {displayBody && (
-                        <div className="relative">
-                          <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3">
-                            <div className="whitespace-pre-wrap text-[15px] text-gray-100 leading-relaxed">{displayBody}</div>
-                          </div>
-                          <div className="absolute top-2 right-2"><CopyBtn text={displayBody} id={`b-${moveKey}`} label="Copy Post" /></div>
-                        </div>
-                      )}
-
-                      {/* Poll options */}
-                      {c.poll_options?.length > 0 && (
-                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3">
-                          <p className="text-xs font-semibold text-blue-400 mb-2">📊 Poll Options</p>
-                          {c.poll_options.map((opt, pi) => (
-                            <div key={pi} className="flex items-center gap-2 py-1">
-                              <span className="w-5 h-5 rounded-full border-2 border-blue-500/50 shrink-0 flex items-center justify-center text-xs text-blue-400">{pi + 1}</span>
-                              <span className="text-sm text-gray-200">{opt}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Bottom row: engagement, pinned, monetization */}
-                      {c.engagement_question && (
-                        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5">
-                          <span className="text-xs mt-0.5">💬</span>
-                          <p className="text-sm text-gray-200 flex-1">{c.engagement_question}</p>
-                          <CopyBtn text={c.engagement_question} id={`eq-${moveKey}`} />
-                        </div>
-                      )}
-                      {c.pinned_comment && (
-                        <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-2.5">
-                          <span className="text-xs mt-0.5">📌</span>
-                          <div className="flex-1"><p className="text-xs font-semibold text-blue-400 mb-0.5">Pinned Comment</p><p className="text-sm text-gray-200">{c.pinned_comment}</p></div>
-                          <CopyBtn text={c.pinned_comment} id={`pin-${moveKey}`} />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-3 flex-wrap">
-                        {c.link_strategy && c.link_strategy !== 'no link' && (
-                          <span className="text-xs text-gray-400 bg-gray-800 border border-gray-700 rounded-full px-2.5 py-1">
-                            {c.link_strategy === 'inject immediately' ? '🔗 Link now' : c.link_strategy === 'wait for momentum' ? '⏳ Link after traction' : c.link_strategy === 'soft CTA in pinned comment' ? '📌 Soft CTA' : c.link_strategy}
-                          </span>
-                        )}
-                        {c.monetization_instruction && (
-                          <span className="text-xs text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 rounded-full px-2.5 py-1">💰 {c.monetization_instruction}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─── Strategy Panel ───
-function StrategyPanel({ strategy, loading, error }) {
-  const [expanded, setExpanded] = useState(true)
-  if (loading) return (
-    <div className="mt-3 bg-violet-500/10 border border-violet-500/30 rounded-xl px-4 py-3 animate-pulse">
-      <div className="flex items-center gap-2"><span className="text-sm">🧠</span><span className="text-sm font-medium text-violet-400">Generating strategy…</span></div>
-    </div>
-  )
-  if (error) return (
-    <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
-      <p className="text-sm text-red-400">{error}</p>
-    </div>
-  )
-  if (!strategy) return null
-
-  const isLow = strategy.relevance === 'low'
-  const relColor = strategy.relevance === 'high' ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40' : strategy.relevance === 'moderate' ? 'text-amber-400 bg-amber-500/20 border-amber-500/40' : 'text-gray-400 bg-gray-800 border-gray-700'
-
-  const copyText = (text) => { navigator.clipboard.writeText(text) }
-
-  return (
-    <div className="mt-3 bg-violet-500/10 border border-violet-500/30 rounded-xl overflow-hidden">
-      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-violet-500/10 transition-colors">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">🧠</span>
-          <span className="text-sm font-semibold text-violet-400">Strategic Analysis</span>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${relColor}`}>{strategy.relevance} relevance</span>
-        </div>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-violet-400 transition-transform ${expanded ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-      </button>
-      {expanded && (
-        <div className="px-4 pb-4 space-y-3">
-          {strategy.relevance_reason && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Relevance</p><p className="text-sm text-gray-300">{strategy.relevance_reason}</p></div>}
-          {strategy.why_trending && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Why It's Trending</p><p className="text-sm text-gray-300">{strategy.why_trending}</p></div>}
-
-          {!isLow && (
-            <>
-              {strategy.positioning_fit && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Positioning Fit</p><p className="text-sm text-gray-300">{strategy.positioning_fit}</p></div>}
-              {strategy.best_angle && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Best Angle</p><p className="text-sm text-gray-300">{strategy.best_angle}</p></div>}
-
-              {strategy.hooks?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-2">Hook Variations</p>
-                  <div className="space-y-1.5">
-                    {strategy.hooks.map((hook, i) => (
-                      <div key={i} className="group flex items-start gap-2 bg-gray-800 border border-violet-500/20 rounded-lg px-3 py-2">
-                        <span className="text-xs text-violet-400 font-bold mt-0.5">{i + 1}</span>
-                        <p className="text-sm text-gray-200 flex-1">{hook}</p>
-                        <button onClick={() => copyText(hook)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {strategy.engagement_question && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Engagement Question</p>
-                  <div className="group flex items-start gap-2 bg-gray-800 border border-violet-500/20 rounded-lg px-3 py-2">
-                    <p className="text-sm text-gray-200 flex-1">{strategy.engagement_question}</p>
-                    <button onClick={() => copyText(strategy.engagement_question)} className="opacity-0 group-hover:opacity-100 text-violet-300 hover:text-violet-500 transition-all shrink-0" title="Copy">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {strategy.monetization_direction && <div><p className="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-1">Monetization</p><p className="text-sm text-gray-300">{strategy.monetization_direction}</p></div>}
-              {strategy.risk_warnings && <div><p className="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-1">⚠️ Risks</p><p className="text-sm text-gray-400">{strategy.risk_warnings}</p></div>}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ─── Rising Posts List ───
-function RisingPostsList({ posts, activeProject, session }) {
-  const [strategies, setStrategies] = useState({})
-
-  async function generateStrategy(post) {
-    if (!activeProject) return
-    const postId = post.post_id
-    setStrategies(prev => ({ ...prev, [postId]: { loading: true, strategy: null, error: null } }))
-    try {
-      const res = await fetch('/api/ai/strategy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ post, project: activeProject }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to generate strategy')
-      setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: data.strategy, error: null } }))
-    } catch (err) {
-      setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: null, error: err.message } }))
-    }
-  }
-
+function RisingPostsList({ posts, session }) {
   if (!posts || posts.length === 0) return null
   return (
     <div className="space-y-3">
@@ -524,7 +253,6 @@ function RisingPostsList({ posts, activeProject, session }) {
         const m1Val = Object.values(metrics)[0] || 0
         const m2Val = Object.values(metrics)[1] || 0
         const m3Val = Object.values(metrics)[2] || 0
-        const strat = strategies[post.post_id]
         return (
           <div key={post.post_id || i} className={`border rounded-2xl p-5 animate-slide-up transition-all ${(post.tags || []).includes('early_riser') ? 'bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/20 hover:border-amber-400' : 'bg-gray-900 border-gray-700 hover:border-gray-500'}`} style={{ animationDelay: `${i * 50}ms` }}>
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -570,14 +298,6 @@ function RisingPostsList({ posts, activeProject, session }) {
               </div>
             </div>
 
-            {/* Strategy section */}
-            {activeProject && !strat && (
-              <button onClick={() => generateStrategy(post)}
-                className="mt-3 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/50 transition-all">
-                <span>🧠</span> Generate Strategy
-              </button>
-            )}
-            {strat && <StrategyPanel strategy={strat.strategy} loading={strat.loading} error={strat.error} />}
           </div>
         )
       })}
@@ -642,11 +362,8 @@ export default function Dashboard({ supabase, session }) {
   const [publicPages, setPublicPages] = useState([])
   const [showPublicPages, setShowPublicPages] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  // Projects state
-  const [projects, setProjects] = useState([])
-  const [activeProjectId, setActiveProjectId] = useState(null)
-  const [editingProject, setEditingProject] = useState(null)
-  const [batchStrategy, setBatchStrategy] = useState({ loading: false, strategy: null, error: null })
+  const [savedScanAudienceProfile, setSavedScanAudienceProfile] = useState('')
+  const [showSavedScanAudienceProfile, setShowSavedScanAudienceProfile] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
   // Notification state
   const [notifSettings, setNotifSettings] = useState(null)
@@ -683,8 +400,8 @@ export default function Dashboard({ supabase, session }) {
   const toastTimer = useRef(null)
   const userId = session?.user?.id
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans(); loadCostRates() }, [userId])
-  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || '') }, [selectedStreamId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates() }, [userId])
+  useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || ''); setShowAudienceProfile(!s?.audience_profile) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
   useEffect(() => {
@@ -780,35 +497,30 @@ export default function Dashboard({ supabase, session }) {
   }
   async function deleteGroupPage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setGroupPages(groupPages.filter((p) => p.id !== id)) }
 
-  // ─── Project functions ───
-  async function loadProjects() { const { data } = await supabase.from('projects').select('*').eq('user_id', userId).order('created_at', { ascending: true }); setProjects(data || []) }
-  async function saveProject(proj) {
-    if (proj.id) {
-      const { data, error } = await supabase.from('projects').update({ name: proj.name, niche: proj.niche, audience: proj.audience, tone: proj.tone, monetization_goal: proj.monetization_goal, risk_tolerance: proj.risk_tolerance, custom_instructions: proj.custom_instructions, updated_at: new Date().toISOString() }).eq('id', proj.id).select().single()
-      if (!error && data) { setProjects(projects.map(p => p.id === data.id ? data : p)); setEditingProject(null); showToast('Project saved!') }
-    } else {
-      const { data, error } = await supabase.from('projects').insert({ user_id: userId, name: proj.name, niche: proj.niche, audience: proj.audience, tone: proj.tone, monetization_goal: proj.monetization_goal, risk_tolerance: proj.risk_tolerance, custom_instructions: proj.custom_instructions }).select().single()
-      if (!error && data) { setProjects([...projects, data]); setActiveProjectId(data.id); setEditingProject(null); showToast('Project created!') }
-    }
-  }
-  async function deleteProject(id) { if (!confirm('Delete this project?')) return; await supabase.from('projects').delete().eq('id', id); setProjects(projects.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null); showToast('Project deleted.') }
-  const activeProject = projects.find(p => p.id === activeProjectId) || null
-
-  async function generateBatchStrategy(posts) {
-    if (!activeProject || !posts?.length) return
-    setBatchStrategy({ loading: true, strategy: null, error: null })
+  // Relevance scoring for saved scans
+  async function scoreSavedScanRelevance(posts) {
+    // Try to get audience profile from the linked stream, or from inline input
+    const stream = selectedSavedScan?.stream_id ? streams.find(s => s.id === selectedSavedScan.stream_id) : null
+    const audienceProfile = stream?.audience_profile || savedScanAudienceProfile
+    if (!audienceProfile) { showToast('Set an audience profile first', 'error'); setShowSavedScanAudienceProfile(true); return }
+    setRelevanceScoring(true)
+    setRelevanceStats(null)
+    setRelevanceFilter('all')
     try {
-      const res = await fetch('/api/ai/batch-strategy', {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/api/ai/relevance', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ posts, project: activeProject }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ posts, audienceProfile }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to generate strategy')
-      setBatchStrategy({ loading: false, strategy: data.strategy, error: null })
-    } catch (err) {
-      setBatchStrategy({ loading: false, strategy: null, error: err.message })
-    }
+      if (res.ok) {
+        setSelectedSavedScan(prev => ({ ...prev, results: data.posts }))
+        setRelevanceStats(data.stats)
+        showToast(`Scored! ${data.stats.relevant} relevant, ${data.stats.irrelevant} filtered out (AI cost: $${data.stats.costEstimate || '?'})`)
+      } else { showToast(data.error || 'Scoring failed', 'error') }
+    } catch (err) { showToast('Relevance scoring failed', 'error') }
+    setRelevanceScoring(false)
   }
   async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
@@ -877,7 +589,7 @@ export default function Dashboard({ supabase, session }) {
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans(); loadCostRates() }
   }
-  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setBatchStrategy({ loading: false, strategy: null, error: null }) } }
+  async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setRelevanceStats(null); setRelevanceFilter('all'); setRelevanceScoring(false); const stream = data.stream_id ? streams.find(s => s.id === data.stream_id) : null; setSavedScanAudienceProfile(stream?.audience_profile || ''); setShowSavedScanAudienceProfile(false) } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
   async function rerunSavedScan(scan) {
@@ -1227,29 +939,6 @@ export default function Dashboard({ supabase, session }) {
             </div>
           ))}
 
-          {/* Projects */}
-          <div className="flex items-center justify-between mb-2 mt-6">
-            <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">Projects</span>
-            <button onClick={() => { setEditingProject({ name: '', niche: '', audience: '', tone: '', monetization_goal: '', risk_tolerance: 'moderate', custom_instructions: '' }); setView('project-edit') }} className="text-gray-500 hover:text-violet-400 transition-colors">{Icons.plus}</button>
-          </div>
-          {projects.length === 0 && <p className="text-sm text-gray-500 mt-1">No projects yet.</p>}
-          {projects.map((proj) => (
-            <div key={proj.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${activeProjectId === proj.id ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-              onClick={() => setActiveProjectId(activeProjectId === proj.id ? null : proj.id)}>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="shrink-0 text-sm">🧠</span>
-                <span className="text-sm font-medium truncate">{proj.name}</span>
-                {activeProjectId === proj.id && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />}
-              </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                <button onClick={(e) => { e.stopPropagation(); setEditingProject(proj); setView('project-edit') }} className="text-gray-600 hover:text-violet-400 transition-colors">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); deleteProject(proj.id) }} className="text-gray-600 hover:text-red-400 transition-colors">{Icons.trash}</button>
-              </div>
-            </div>
-          ))}
-
           {savedScans.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Saved Scans</span></div>
@@ -1306,83 +995,6 @@ export default function Dashboard({ supabase, session }) {
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden bg-gray-950">
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
-
-        {/* ─── Project Editor ─── */}
-        {view === 'project-edit' && editingProject && (
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-2xl">
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-2xl">🧠</span>
-                <h2 className="text-2xl font-bold text-white">{editingProject.id ? 'Edit Project' : 'New Project'}</h2>
-              </div>
-              <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4 mb-6">
-                <p className="text-sm text-violet-400">Projects define your content strategy. When active, each trending post gets a "Generate Strategy" button that produces niche-specific hooks, angles, and monetization advice tailored to these settings.</p>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Project Name *</label>
-                  <input type="text" value={editingProject.name} onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })} placeholder="e.g., Finance Page, Crypto Newsletter" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Niche *</label>
-                  <input type="text" value={editingProject.niche} onChange={(e) => setEditingProject({ ...editingProject, niche: e.target.value })} placeholder="e.g., Financial news and economics for retail investors" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
-                  <p className="text-xs text-gray-500 mt-1">Be specific. "Finance" is vague. "Breaking financial news that impacts everyday investors" is better.</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Target Audience *</label>
-                  <input type="text" value={editingProject.audience} onChange={(e) => setEditingProject({ ...editingProject, audience: e.target.value })} placeholder="e.g., 25-55 year olds interested in stocks, crypto, and economic policy" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Tone *</label>
-                  <input type="text" value={editingProject.tone} onChange={(e) => setEditingProject({ ...editingProject, tone: e.target.value })} placeholder="e.g., Bold and opinionated but factual, uses urgency" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
-                  <p className="text-xs text-gray-500 mt-1">This directly shapes the hooks and angles the AI generates. Be descriptive.</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Monetization Goal *</label>
-                  <input type="text" value={editingProject.monetization_goal} onChange={(e) => setEditingProject({ ...editingProject, monetization_goal: e.target.value })} placeholder="e.g., Facebook ad revenue + drive traffic to blog with display ads" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Risk Tolerance</label>
-                  <select value={editingProject.risk_tolerance} onChange={(e) => setEditingProject({ ...editingProject, risk_tolerance: e.target.value })} className="px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 focus:outline-none focus:border-violet-400 cursor-pointer">
-                    <option value="low">Low — Play it safe, avoid anything controversial</option>
-                    <option value="moderate">Moderate — Take measured positions, avoid extremes</option>
-                    <option value="high">High — Lean into hot takes and controversy for engagement</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Custom Instructions (optional)</label>
-                  <textarea value={editingProject.custom_instructions || ''} onChange={(e) => setEditingProject({ ...editingProject, custom_instructions: e.target.value })} placeholder="Any additional rules or preferences. e.g., Never mention specific stock tickers. Always include a call-to-action." rows={3} className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20 resize-none" />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => { if (!editingProject.name || !editingProject.niche) { showToast('Name and Niche are required.', 'error'); return }; saveProject(editingProject) }}
-                  className="px-6 py-2.5 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 rounded-xl text-sm font-semibold text-white shadow-sm transition-all">
-                  {editingProject.id ? 'Save Changes' : 'Create Project'}
-                </button>
-                <button onClick={() => { setEditingProject(null); if (projects.length > 0) setView('quick'); else setView('quick') }}
-                  className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm font-medium text-gray-200 transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Active Project Bar (shows above all scan views) ─── */}
-        {view !== 'account' && view !== 'admin' && view !== 'project-edit' && projects.length > 0 && (
-          <div className="shrink-0 px-6 pt-4 pb-0 max-w-4xl">
-            <div className="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5">
-              <span className="text-sm">🧠</span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Project</span>
-              <select value={activeProjectId || ''} onChange={(e) => setActiveProjectId(e.target.value || null)}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-violet-400 cursor-pointer">
-                <option value="">None — No AI strategy</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              {activeProject && <span className="text-xs text-violet-400 font-medium">{activeProject.niche}</span>}
-            </div>
-          </div>
-        )}
 
         {/* ─── Recent Scans Grid ─── */}
         {view === 'recent' && (
@@ -1454,15 +1066,7 @@ export default function Dashboard({ supabase, session }) {
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
               {isQuickScanning && <ScanningAnimation />}
 
-              {activeProject && quickRisingPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(quickRisingPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${quickRisingPosts.length} Posts`}
-                </button>
-              )}
-              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={quickRisingPosts} />
-
-              <RisingPostsList posts={quickRisingPosts} activeProject={activeProject} session={session} />
+              <RisingPostsList posts={quickRisingPosts} session={session} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -1487,16 +1091,67 @@ export default function Dashboard({ supabase, session }) {
                 {Icons.zap} Run This Scan Again
               </button>
 
-              {/* Batch AI Strategy */}
-              {activeProject && selectedSavedScan.results?.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(selectedSavedScan.results)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${selectedSavedScan.results.length} Posts`}
-                </button>
+              {/* Audience Profile for relevance scoring */}
+              {selectedSavedScan.results?.length > 0 && (
+                <div className="mb-4">
+                  <button onClick={() => setShowSavedScanAudienceProfile(!showSavedScanAudienceProfile)}
+                    className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl border text-sm font-medium transition-all ${(selectedSavedScan.stream_id && streams.find(s => s.id === selectedSavedScan.stream_id)?.audience_profile) || savedScanAudienceProfile ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800'}`}>
+                    <span>🎯</span>
+                    <span>{(selectedSavedScan.stream_id && streams.find(s => s.id === selectedSavedScan.stream_id)?.audience_profile) || savedScanAudienceProfile ? 'Audience profile set' : 'Set audience profile for relevance scoring'}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-auto transition-transform ${showSavedScanAudienceProfile ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                  {showSavedScanAudienceProfile && (
+                    <div className="mt-2 p-5 bg-gray-900 border border-gray-700 rounded-xl space-y-3">
+                      {selectedSavedScan.stream_id && streams.find(s => s.id === selectedSavedScan.stream_id)?.audience_profile ? (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">From stream: {streams.find(s => s.id === selectedSavedScan.stream_id)?.name}</p>
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap">{streams.find(s => s.id === selectedSavedScan.stream_id)?.audience_profile}</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Audience Profile</label>
+                          <p className="text-xs text-gray-500 mb-2">Describe your page, your audience, and what topics are relevant. The AI uses this to score every rising post for relevance.</p>
+                          <textarea value={savedScanAudienceProfile} onChange={(e) => setSavedScanAudienceProfile(e.target.value)}
+                            rows={6} placeholder={"Example:\nNashville ToDo is a Nashville lifestyle and entertainment Facebook page with 198K followers.\nCore topics: Nashville restaurants, bars, live music, concerts, local events, tourism, things to do, food & drink trends, Southern lifestyle, local business openings/closings."}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
-              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={selectedSavedScan.results} />
 
-              <RisingPostsList posts={selectedSavedScan.results || []} activeProject={activeProject} session={session} />
+              {/* Relevance scoring + filter */}
+              {(() => {
+                const savedScanResults = selectedSavedScan.results || []
+                const filteredSavedPosts = relevanceFilter === 'relevant' ? savedScanResults.filter(p => p.relevance_score >= 6) : relevanceFilter === 'irrelevant' ? savedScanResults.filter(p => p.relevance_score !== null && p.relevance_score < 4) : savedScanResults
+                return (
+                  <>
+                    {savedScanResults.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        {!relevanceStats && (
+                          <button onClick={() => scoreSavedScanRelevance(savedScanResults)} disabled={relevanceScoring}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${relevanceScoring ? 'bg-indigo-100 text-indigo-400 border border-indigo-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white shadow-sm shadow-indigo-500/20 hover:shadow-md'}`}>
+                            <span>🎯</span> {relevanceScoring ? 'Scoring relevance…' : `Score Relevance (${savedScanResults.length} posts)`}
+                          </button>
+                        )}
+                        {relevanceStats && (
+                          <>
+                            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2">
+                              <span className="text-xs font-medium text-gray-500">Relevance:</span>
+                              <button onClick={() => setRelevanceFilter('all')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'all' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>All ({relevanceStats.total})</button>
+                              <button onClick={() => setRelevanceFilter('relevant')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'relevant' ? 'bg-emerald-500 text-white' : 'text-emerald-400 hover:bg-emerald-500/20'}`}>✓ Relevant ({relevanceStats.relevant})</button>
+                              <button onClick={() => setRelevanceFilter('irrelevant')} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${relevanceFilter === 'irrelevant' ? 'bg-red-500 text-white' : 'text-red-400 hover:bg-red-500/20'}`}>✗ Skip ({relevanceStats.irrelevant})</button>
+                            </div>
+                            <button onClick={() => { setRelevanceStats(null); setRelevanceFilter('all') }} className="text-xs text-gray-500 hover:text-gray-300">Clear scores</button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <RisingPostsList posts={filteredSavedPosts} session={session} />
+                  </>
+                )
+              })()}
               {(!selectedSavedScan.results || selectedSavedScan.results.length === 0) && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">This saved scan has no results.</p></div>
               )}
@@ -1744,16 +1399,7 @@ export default function Dashboard({ supabase, session }) {
                 </div>
               )}
 
-              {/* Batch AI Strategy */}
-              {activeProject && filteredPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(filteredPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${filteredPosts.length} Posts`}
-                </button>
-              )}
-              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={filteredPosts} />
-
-              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} activeProject={activeProject} session={session} />}
+              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} session={session} />}
               {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
                   <p className="text-base text-gray-500">All {risingPosts.length} rising posts were filtered out by the {CATEGORIES[streamCategory]?.label} filter.</p>
@@ -1831,15 +1477,7 @@ export default function Dashboard({ supabase, session }) {
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
 
-              {activeProject && risingPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(risingPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${risingPosts.length} Posts`}
-                </button>
-              )}
-              <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={risingPosts} />
-
-              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} activeProject={activeProject} session={session} />}
+              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} session={session} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
