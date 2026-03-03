@@ -89,6 +89,9 @@ const Icons = {
   user: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
   dollar: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>,
   globe: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg>,
+  share: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>,
+  copy: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>,
+  check: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>,
 }
 
 const SCANNING_MESSAGES = [
@@ -493,7 +496,7 @@ function StrategyPanel({ strategy, loading, error }) {
 }
 
 // ─── Rising Posts List ───
-function RisingPostsList({ posts, activeProject, session }) {
+function RisingPostsList({ posts, activeProject, session, onStrategyChange }) {
   const [strategies, setStrategies] = useState({})
 
   async function generateStrategy(post) {
@@ -508,7 +511,9 @@ function RisingPostsList({ posts, activeProject, session }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate strategy')
-      setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: data.strategy, error: null } }))
+      const strat = { loading: false, strategy: data.strategy, error: null }
+      setStrategies(prev => ({ ...prev, [postId]: strat }))
+      if (onStrategyChange) onStrategyChange(postId, data.strategy)
     } catch (err) {
       setStrategies(prev => ({ ...prev, [postId]: { loading: false, strategy: null, error: err.message } }))
     }
@@ -581,6 +586,47 @@ function RisingPostsList({ posts, activeProject, session }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Share Modal ───
+function ShareModal({ shareUrl, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  function copyLink() {
+    navigator.clipboard.writeText(shareUrl).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">🔗</span>
+          <h2 className="text-lg font-bold text-white">Share Results</h2>
+        </div>
+        <p className="text-sm text-gray-400 mb-5">Anyone with this link can view the results. They can't run scans unless they're logged in.</p>
+        <div className="flex gap-2 mb-4">
+          <input readOnly value={shareUrl}
+            className="flex-1 min-w-0 px-3 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-200 font-mono focus:outline-none select-all"
+            onFocus={e => e.target.select()} />
+          <button onClick={copyLink}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${copied ? 'bg-emerald-500 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+            {copied ? Icons.check : Icons.copy}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 mb-5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+          Read-only view — includes all posts{' '}and any AI analysis that was run.
+        </div>
+        <button onClick={onClose}
+          className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-xl transition-colors">
+          Close
+        </button>
+      </div>
     </div>
   )
 }
@@ -682,6 +728,10 @@ export default function Dashboard({ supabase, session }) {
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
   const userId = session?.user?.id
+  // Share state
+  const [shareModal, setShareModal] = useState(null) // null | { url: string }
+  const [sharingLoading, setSharingLoading] = useState(false)
+  const activePostStrategiesRef = useRef({})
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadProjects(); loadRecentPublicScans(); loadCostRates() }, [userId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); setBatchStrategy({ loading: false, strategy: null, error: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || '') }, [selectedStreamId])
@@ -877,6 +927,32 @@ export default function Dashboard({ supabase, session }) {
     const { data, error } = await supabase.from('saved_scans').insert({ user_id: userId, stream_id: streamId || null, name, time_window: timeWindow, min_interactions: minInteractions, max_interactions: maxInteractions, total_scraped: stats.totalScraped, rising_count: posts.length, results: posts, cost_usd: stats.costUsd || 0 }).select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').single()
     if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans(); loadCostRates() }
   }
+  async function createShare({ title, posts, batchStrategyData, scanMeta }) {
+    if (!posts || posts.length === 0) { showToast('No posts to share.', 'error'); return }
+    setSharingLoading(true)
+    try {
+      const res = await fetch('/api/share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          title,
+          posts,
+          batch_strategy: batchStrategyData || null,
+          post_strategies: activePostStrategiesRef.current || {},
+          scan_meta: scanMeta || {},
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create share')
+      const shareUrl = `${window.location.origin}/share/${data.share_token}`
+      setShareModal({ url: shareUrl })
+    } catch (err) {
+      showToast(err.message || 'Failed to create share.', 'error')
+    } finally {
+      setSharingLoading(false)
+    }
+  }
+
   async function loadSavedScan(id) { const { data } = await supabase.from('saved_scans').select('*').eq('id', id).single(); if (data) { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setSelectedSavedScan(data); setView('saved'); setBatchStrategy({ loading: false, strategy: null, error: null }) } }
   async function deleteSavedScan(id) { if (!confirm('Delete this saved scan?')) return; await supabase.from('saved_scans').delete().eq('id', id); setSavedScans(savedScans.filter(s => s.id !== id)); if (selectedSavedScan?.id === id) setSelectedSavedScan(null) }
 
@@ -938,6 +1014,7 @@ export default function Dashboard({ supabase, session }) {
     const fg = () => activeScanRef.current?.id === scanId
 
     const token = session?.access_token
+    activePostStrategiesRef.current = {}
     setStatus('starting'); setMessage('Starting scan...'); setResults([]); setStats({ totalScraped: 0, filteredOut: 0, costUsd: null })
     try {
       const startRes = await fetch('/api/scan/start', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ pageUrls, streamId, timeWindowHours: timeWindow, platform }) })
@@ -1161,6 +1238,7 @@ export default function Dashboard({ supabase, session }) {
           {toast.msg}
         </div>
       )}
+      {shareModal && <ShareModal shareUrl={shareModal.url} onClose={() => setShareModal(null)} />}
       {/* ─── Sidebar ─── */}
       <div className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col h-screen sticky top-0">
         <div className="p-5 border-b border-gray-800">
@@ -1454,15 +1532,23 @@ export default function Dashboard({ supabase, session }) {
               <ScanSummary status={quickScanStatus} message={quickScanMessage} postCount={quickRisingPosts.length} totalScraped={quickScanStats.totalScraped} filteredOut={quickScanStats.filteredOut} costUsd={quickScanStats.costUsd} />
               {isQuickScanning && <ScanningAnimation />}
 
-              {activeProject && quickRisingPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(quickRisingPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${quickRisingPosts.length} Posts`}
-                </button>
+              {quickRisingPosts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-5">
+                  {activeProject && !batchStrategy.strategy && (
+                    <button onClick={() => generateBatchStrategy(quickRisingPosts)} disabled={batchStrategy.loading}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                      <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${quickRisingPosts.length} Posts`}
+                    </button>
+                  )}
+                  <button onClick={() => createShare({ title: quickUrl.trim() || 'Quick Scan', posts: quickRisingPosts, batchStrategyData: batchStrategy.strategy, scanMeta: { time_window: timeWindow, total_scraped: quickScanStats.totalScraped, cost_usd: quickScanStats.costUsd } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                </div>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={quickRisingPosts} />
 
-              <RisingPostsList posts={quickRisingPosts} activeProject={activeProject} session={session} />
+              <RisingPostsList posts={quickRisingPosts} activeProject={activeProject} session={session} onStrategyChange={(postId, strat) => { activePostStrategiesRef.current[postId] = strat }} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -1482,10 +1568,18 @@ export default function Dashboard({ supabase, session }) {
                 <span>Max: {selectedSavedScan.max_interactions === 0 ? 'No Limit' : formatNumber(selectedSavedScan.max_interactions)}</span><span>·</span>
                 <span>{selectedSavedScan.total_scraped} scraped → {selectedSavedScan.rising_count} rising</span>
               </div>
-              <button onClick={() => rerunSavedScan(selectedSavedScan)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors mb-6">
-                {Icons.zap} Run This Scan Again
-              </button>
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <button onClick={() => rerunSavedScan(selectedSavedScan)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors">
+                  {Icons.zap} Run This Scan Again
+                </button>
+                {selectedSavedScan.results?.length > 0 && (
+                  <button onClick={() => createShare({ title: selectedSavedScan.name, posts: selectedSavedScan.results, batchStrategyData: batchStrategy.strategy, scanMeta: { time_window: selectedSavedScan.time_window, total_scraped: selectedSavedScan.total_scraped, cost_usd: selectedSavedScan.cost_usd, scan_type: selectedSavedScan.scan_type } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                )}
+              </div>
 
               {/* Batch AI Strategy */}
               {activeProject && selectedSavedScan.results?.length > 0 && !batchStrategy.strategy && (
@@ -1496,7 +1590,7 @@ export default function Dashboard({ supabase, session }) {
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={selectedSavedScan.results} />
 
-              <RisingPostsList posts={selectedSavedScan.results || []} activeProject={activeProject} session={session} />
+              <RisingPostsList posts={selectedSavedScan.results || []} activeProject={activeProject} session={session} onStrategyChange={(postId, strat) => { activePostStrategiesRef.current[postId] = strat }} />
               {(!selectedSavedScan.results || selectedSavedScan.results.length === 0) && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">This saved scan has no results.</p></div>
               )}
@@ -1744,16 +1838,24 @@ export default function Dashboard({ supabase, session }) {
                 </div>
               )}
 
-              {/* Batch AI Strategy */}
-              {activeProject && filteredPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(filteredPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${filteredPosts.length} Posts`}
-                </button>
+              {/* Batch AI Strategy + Share */}
+              {filteredPosts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-5">
+                  {activeProject && !batchStrategy.strategy && (
+                    <button onClick={() => generateBatchStrategy(filteredPosts)} disabled={batchStrategy.loading}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                      <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${filteredPosts.length} Posts`}
+                    </button>
+                  )}
+                  <button onClick={() => createShare({ title: selectedStream?.name || 'Stream Scan', posts: filteredPosts, batchStrategyData: batchStrategy.strategy, scanMeta: { time_window: timeWindow, total_scraped: scanStats.totalScraped, cost_usd: scanStats.costUsd } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                </div>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={filteredPosts} />
 
-              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} activeProject={activeProject} session={session} />}
+              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} activeProject={activeProject} session={session} onStrategyChange={(postId, strat) => { activePostStrategiesRef.current[postId] = strat }} />}
               {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
                   <p className="text-base text-gray-500">All {risingPosts.length} rising posts were filtered out by the {CATEGORIES[streamCategory]?.label} filter.</p>
@@ -1831,15 +1933,23 @@ export default function Dashboard({ supabase, session }) {
               <ScanSummary status={scanStatus} message={scanMessage} postCount={risingPosts.length} totalScraped={scanStats.totalScraped} filteredOut={scanStats.filteredOut} costUsd={scanStats.costUsd} />
               {isScanning && <ScanningAnimation />}
 
-              {activeProject && risingPosts.length > 0 && !batchStrategy.strategy && (
-                <button onClick={() => generateBatchStrategy(risingPosts)} disabled={batchStrategy.loading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all mb-5 ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
-                  <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${risingPosts.length} Posts`}
-                </button>
+              {risingPosts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-5">
+                  {activeProject && !batchStrategy.strategy && (
+                    <button onClick={() => generateBatchStrategy(risingPosts)} disabled={batchStrategy.loading}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${batchStrategy.loading ? 'bg-violet-100 text-violet-400 border border-violet-200 cursor-not-allowed animate-pulse' : 'bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white shadow-sm shadow-violet-500/20 hover:shadow-md'}`}>
+                      <span>🧠</span> {batchStrategy.loading ? 'Building Publishing Plan…' : `Build Publishing Plan from ${risingPosts.length} Posts`}
+                    </button>
+                  )}
+                  <button onClick={() => createShare({ title: selectedPublicStream?.name || 'Public Stream Scan', posts: risingPosts, batchStrategyData: batchStrategy.strategy, scanMeta: { time_window: timeWindow, total_scraped: scanStats.totalScraped, cost_usd: scanStats.costUsd } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                </div>
               )}
               <BatchStrategyPanel strategy={batchStrategy.strategy} loading={batchStrategy.loading} error={batchStrategy.error} posts={risingPosts} />
 
-              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} activeProject={activeProject} session={session} />}
+              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} activeProject={activeProject} session={session} onStrategyChange={(postId, strat) => { activePostStrategiesRef.current[postId] = strat }} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -1952,6 +2062,14 @@ export default function Dashboard({ supabase, session }) {
 
               <ScanSummary status={groupScanStatus} message={groupScanMessage} postCount={groupPosts.length} totalScraped={groupScanStats.totalScraped} filteredOut={groupScanStats.filteredOut} costUsd={groupScanStats.costUsd} />
               {isGroupScanning && <ScanningAnimation />}
+              {groupPosts.length > 0 && (
+                <div className="mb-4">
+                  <button onClick={() => createShare({ title: groupStreams.find(s => s.id === selectedGroupStreamId)?.name || 'Group Scan', posts: groupPosts, batchStrategyData: null, scanMeta: { time_window: groupTimeWindow, total_scraped: groupScanStats.totalScraped, cost_usd: groupScanStats.costUsd, scan_type: 'groups' } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                </div>
+              )}
               {groupPosts.length > 0 && (
                 <div className="space-y-3">
                   {groupPosts.map((post, i) => (
