@@ -15,6 +15,7 @@ export default function Home() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
   const [showResetPassword, setShowResetPassword] = useState(false)
 
   useEffect(() => {
@@ -55,14 +56,14 @@ export default function Home() {
   }
 
   if (showAuth) {
-    return <Auth supabase={supabase} initialMode="login" />
+    return <Auth supabase={supabase} initialMode={authMode} />
   }
 
   return (
     <Homepage
       session={session}
-      onSignIn={() => setShowAuth(true)}
-      onGetStarted={() => setShowAuth(true)}
+      onSignIn={() => { setAuthMode('login'); setShowAuth(true) }}
+      onGetStarted={() => { setAuthMode('signup'); setShowAuth(true) }}
       onSignOut={() => supabase.auth.signOut()}
     />
   )
