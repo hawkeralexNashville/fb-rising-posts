@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import ApifySetup from './ApifySetup'
 
-export default function Account({ supabase, session, settings, setSettings, saveSettings, timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, streams, savedScans, apifyToken, saveApifyToken }) {
+export default function Account({ supabase, session, settings, setSettings, saveSettings, timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, groupMinComments, setGroupMinComments, groupMinReactions, setGroupMinReactions, streams, savedScans, apifyToken, saveApifyToken }) {
   const [email] = useState(session?.user?.email || '')
   const [createdAt] = useState(session?.user?.created_at || '')
   const [newPassword, setNewPassword] = useState('')
@@ -184,6 +184,32 @@ export default function Account({ supabase, session, settings, setSettings, save
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Min Delta (between scans)</label>
               <input type="number" min="1" value={settings.min_delta} onChange={(e) => setSettings({ ...settings, min_delta: parseInt(e.target.value) || 1 })} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" />
               <p className="text-xs text-slate-400 mt-1">Repeat-seen posts must gain this many</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={handleSaveSettings} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-xl text-sm font-semibold text-white transition-colors">
+              Save Settings
+            </button>
+            {settingsSaved && <span className="text-sm text-emerald-600 font-medium animate-fade-in">Saved!</span>}
+          </div>
+        </div>
+
+        {/* ─── Default Group Scan Settings ─── */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-6">
+          <h3 className="text-base font-semibold text-slate-900 mb-1">Default Group Scan Settings</h3>
+          <p className="text-sm text-slate-400 mb-5">These defaults pre-fill when you run a Group Scanner scan.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Default Min Comments</label>
+              <input type="number" min="0" value={groupMinComments} onChange={(e) => setGroupMinComments(parseInt(e.target.value) || 0)} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" />
+              <p className="text-xs text-slate-400 mt-1">Posts must have at least this many comments</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Default Min Reactions</label>
+              <input type="number" min="0" value={groupMinReactions} onChange={(e) => setGroupMinReactions(parseInt(e.target.value) || 0)} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20" />
+              <p className="text-xs text-slate-400 mt-1">Posts must have at least this many reactions</p>
             </div>
           </div>
 
