@@ -446,8 +446,10 @@ export default function Dashboard({ supabase, session }) {
   // Share state
   const [shareModal, setShareModal] = useState(null) // null | { url: string }
   const [sharingLoading, setSharingLoading] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates() }, [userId])
+  useEffect(() => { setSidebarOpen(false) }, [view, selectedStreamId, selectedGroupStreamId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || ''); setShowAudienceProfile(!s?.audience_profile) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
 
@@ -947,8 +949,14 @@ export default function Dashboard({ supabase, session }) {
         </div>
       )}
       {shareModal && <ShareModal shareUrl={shareModal.url} onClose={() => setShareModal(null)} />}
+
+      {/* ─── Mobile overlay backdrop ─── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* ─── Sidebar ─── */}
-      <div className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col h-screen sticky top-0">
+      <div className={`fixed md:sticky top-0 left-0 h-screen z-40 w-72 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center text-white">{Icons.trending}</div>
@@ -1066,14 +1074,24 @@ export default function Dashboard({ supabase, session }) {
       </div>
 
       {/* ─── Main ─── */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden bg-gray-950">
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden bg-gray-950 min-w-0">
+        {/* Mobile top bar */}
+        <div className="md:hidden shrink-0 flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center text-white">{Icons.trending}</div>
+            <span className="text-base font-bold tracking-tight text-white">Rising Posts</span>
+          </div>
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" aria-label="Open menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+          </button>
+        </div>
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
 
         {/* ─── Recent Scans Grid ─── */}
         {view === 'recent' && (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <span className="text-gray-500">{Icons.clock}</span>
                 <h2 className="text-2xl font-bold text-white">Recent Scans</h2>
@@ -1123,7 +1141,7 @@ export default function Dashboard({ supabase, session }) {
         {/* ─── Quick Scan ─── */}
         {view === 'quick' && (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-4xl">
+            <div className="p-4 sm:p-6 max-w-4xl">
               <div className="flex items-center gap-2 mb-1"><span className="text-orange-400">{Icons.zap}</span><h2 className="text-2xl font-bold text-white">Quick Scan</h2></div>
               <p className="text-base text-gray-400 mb-5">Paste a URL and scan it instantly.</p>
 
@@ -1157,7 +1175,7 @@ export default function Dashboard({ supabase, session }) {
         {/* ─── Saved Scan ─── */}
         {view === 'saved' && selectedSavedScan && (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-4xl">
+            <div className="p-4 sm:p-6 max-w-4xl">
               <div className="flex items-center gap-2 mb-1"><span className="text-violet-400">{Icons.folder}</span><h2 className="text-2xl font-bold text-white">{selectedSavedScan.name}</h2></div>
               <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
                 <span>{formatDate(selectedSavedScan.created_at)}</span><span>·</span>
@@ -1265,10 +1283,10 @@ export default function Dashboard({ supabase, session }) {
           const hiddenCount = risingPosts.length - categoryFiltered.length
           return (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-4xl">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-2xl font-bold text-white">{selectedStream.name}</h2>
-                <div className="flex items-center gap-2">
+            <div className="p-4 sm:p-6 max-w-4xl">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                <h2 className="text-xl sm:text-2xl font-bold text-white">{selectedStream.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
                   <select value={streamCategory} onChange={(e) => updateStreamCategory(selectedStream.id, e.target.value)}
                     className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-xs font-medium text-gray-300 focus:outline-none focus:border-orange-400 cursor-pointer">
                     {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
@@ -1511,12 +1529,12 @@ export default function Dashboard({ supabase, session }) {
         {/* ─── Public Stream View ─── */}
         {view === 'public' && selectedPublicStream && (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-4xl">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <span className="text-emerald-500">{Icons.globe}</span>
-                  <h2 className="text-2xl font-bold text-white">{selectedPublicStream.name}</h2>
-                  <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-xs font-medium text-emerald-400">Public</span>
+            <div className="p-4 sm:p-6 max-w-4xl">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-emerald-500 shrink-0">{Icons.globe}</span>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white truncate">{selectedPublicStream.name}</h2>
+                  <span className="shrink-0 px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 rounded-full text-xs font-medium text-emerald-400">Public</span>
                 </div>
                 <button onClick={clonePublicStream}
                   className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-gray-700 bg-gray-800 text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 hover:border-orange-500/40 transition-all">
@@ -1588,7 +1606,7 @@ export default function Dashboard({ supabase, session }) {
         {/* ─── Group Scanner ─── */}
         {view === 'groups' && selectedGroupStreamId && (
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 max-w-4xl">
+            <div className="p-4 sm:p-6 max-w-4xl">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">👥</span>
