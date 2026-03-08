@@ -10,10 +10,15 @@ export default function ApifySetup({ onSave, isUpdate = false }) {
   async function handleSave(e) {
     e.preventDefault()
     setError(null)
-    const trimmed = token.trim()
+    let trimmed = token.trim()
     if (!trimmed) { setError('Please paste your Apify API token.'); return }
+    // If they pasted a URL like https://api.apify.com/v2/...?token=apify_api_xxx, extract just the token
+    try {
+      const urlMatch = trimmed.match(/[?&]token=(apify_api_[^\s&]+)/)
+      if (urlMatch) trimmed = urlMatch[1]
+    } catch {}
     if (!trimmed.startsWith('apify_api_')) {
-      setError('That doesn\'t look like an Apify token. It should start with "apify_api_".')
+      setError('Paste your API token, not the URL. It looks like "apify_api_..." and can be found under Settings → Integrations on apify.com.')
       return
     }
     setSaving(true)
@@ -108,7 +113,7 @@ export default function ApifySetup({ onSave, isUpdate = false }) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-white mb-1">Copy your API token</p>
-                <p className="text-sm text-gray-400 mb-3">Once signed in, go to <strong className="text-white">Settings → Integrations</strong> and copy your <strong className="text-white">Personal API token</strong>. It starts with <code className="text-orange-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">apify_api_</code></p>
+                <p className="text-sm text-gray-400 mb-3">Once signed in, go to <strong className="text-white">Settings → Integrations</strong>. Click the <strong className="text-white">copy icon</strong> next to your Personal API token — copy the token itself, not the URL. It starts with <code className="text-orange-400 bg-gray-800 px-1.5 py-0.5 rounded text-xs">apify_api_</code></p>
                 <a
                   href="https://console.apify.com/account/integrations"
                   target="_blank"
