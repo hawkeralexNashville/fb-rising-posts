@@ -113,11 +113,16 @@ export async function POST(request) {
     const { data: pages } = await supabase.from('monitored_pages').select('url').eq('stream_id', streamId)
     if (!pages?.length) return NextResponse.json({ error: 'No pages in this stream' }, { status: 400 })
 
+    // Get user's own Apify token
+    const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
+    const apifyApiToken = settingsRow?.apify_api_token
+    if (!apifyApiToken) return NextResponse.json({ error: 'No Apify API key found. Add your key in Settings.' }, { status: 400 })
+
     // Start Apify scan
     const resultsLimit = getResultsLimit(timeWindowHours)
     const newerThan = new Date(Date.now() - timeWindowHours * 3600000).toISOString()
     const apifyRes = await fetch(
-      `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${process.env.APIFY_API_TOKEN}`,
+      `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${apifyApiToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,7 +142,7 @@ export async function POST(request) {
     const maxWait = Date.now() + 300000
     let runData = null
     while (Date.now() < maxWait) {
-      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${process.env.APIFY_API_TOKEN}`)
+      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apifyApiToken}`)
       const statusData = await statusRes.json()
       const status = statusData.data?.status
       if (status === 'SUCCEEDED') { runData = statusData.data; break }
@@ -147,7 +152,7 @@ export async function POST(request) {
     if (!runData) return NextResponse.json({ error: 'Scan timed out' }, { status: 504 })
 
     // Get results
-    const dataRes = await fetch(`https://api.apify.com/v2/datasets/${runData.defaultDatasetId}/items?token=${process.env.APIFY_API_TOKEN}&limit=500`)
+    const dataRes = await fetch(`https://api.apify.com/v2/datasets/${runData.defaultDatasetId}/items?token=${apifyApiToken}&limit=500`)
     const rawPosts = await dataRes.json()
 
     // Normalize + filter rising (age-weighted algorithm)

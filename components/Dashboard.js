@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Account from './Account'
 import Admin from './Admin'
+import ApifySetup from './ApifySetup'
 
 // ─── Platform Config ───
 const PLATFORMS = {
@@ -455,6 +456,8 @@ export default function Dashboard({ supabase, session }) {
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
   const userId = session?.user?.id
+  // undefined = not checked yet, null = checked but missing, string = set
+  const [apifyToken, setApifyToken] = useState(undefined)
   // Share state
   const [shareModal, setShareModal] = useState(null) // null | { url: string }
   const [sharingLoading, setSharingLoading] = useState(false)
@@ -583,7 +586,9 @@ export default function Dashboard({ supabase, session }) {
     } catch (err) { showToast('Relevance scoring failed', 'error') }
     setRelevanceScoring(false)
   }
-  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true) } }
+  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true); setApifyToken(data.apify_api_token || null) } else { setApifyToken(null) } }
+
+  async function saveApifyToken(token) { const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update({ apify_api_token: token }).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, apify_api_token: token }) }; setApifyToken(token) }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadRecentPublicScans() { const { data } = await supabase.from('saved_scans').select('id, name, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').order('created_at', { ascending: false }).limit(60); setRecentPublicScans(data || []) }
   async function loadCostRates() { try { const token = (await supabase.auth.getSession()).data.session?.access_token; if (!token) return; const res = await fetch('/api/scan/cost-rates', { headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { const data = await res.json(); setCostRates(data) } } catch(e) { console.error('Failed to load cost rates:', e) } }
@@ -953,6 +958,16 @@ export default function Dashboard({ supabase, session }) {
     if (!error && data) { setSavedScans([data, ...savedScans]); loadRecentPublicScans(); loadCostRates() }
   }
 
+  // Still loading settings — show minimal spinner
+  if (apifyToken === undefined) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-950">
+      <div className="w-7 h-7 border-2 border-orange-800 border-t-orange-500 rounded-full animate-spin" />
+    </div>
+  )
+
+  // No Apify token set — show onboarding
+  if (!apifyToken) return <ApifySetup onSave={saveApifyToken} />
+
   return (
     <div className="min-h-screen flex bg-gray-950">
       {toast && (
@@ -1104,7 +1119,7 @@ export default function Dashboard({ supabase, session }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
           </button>
         </div>
-        {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} />}
+        {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} apifyToken={apifyToken} saveApifyToken={saveApifyToken} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
 
         {/* ─── Recent Scans Grid ─── */}

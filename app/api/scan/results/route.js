@@ -128,15 +128,20 @@ export async function GET(request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Get user's own Apify token
+    const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
+    const apifyApiToken = settingsRow?.apify_api_token
+    if (!apifyApiToken) return NextResponse.json({ error: 'No Apify API key found.' }, { status: 400 })
+
     // Get dataset + cost
-    const runRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${process.env.APIFY_API_TOKEN}`)
+    const runRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apifyApiToken}`)
     const runData = await runRes.json()
     const datasetId = runData.data?.defaultDatasetId
     const costUsd = runData.data?.usageTotalUsd ?? null
 
     if (!datasetId) return NextResponse.json({ error: 'No dataset found' }, { status: 500 })
 
-    const dataRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${process.env.APIFY_API_TOKEN}&limit=500`)
+    const dataRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${apifyApiToken}&limit=500`)
     const rawPosts = await dataRes.json()
 
     if (!Array.isArray(rawPosts) || rawPosts.length === 0) {

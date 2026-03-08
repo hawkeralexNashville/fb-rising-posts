@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import ApifySetup from './ApifySetup'
 
-export default function Account({ supabase, session, settings, setSettings, saveSettings, timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, streams, savedScans }) {
+export default function Account({ supabase, session, settings, setSettings, saveSettings, timeWindow, setTimeWindow, minInteractions, setMinInteractions, maxInteractions, setMaxInteractions, streams, savedScans, apifyToken, saveApifyToken }) {
   const [email] = useState(session?.user?.email || '')
   const [createdAt] = useState(session?.user?.created_at || '')
   const [newPassword, setNewPassword] = useState('')
@@ -86,6 +87,31 @@ export default function Account({ supabase, session, settings, setSettings, save
       <div className="p-6 max-w-2xl">
         <h2 className="text-2xl font-bold text-slate-900 mb-1">Account</h2>
         <p className="text-base text-slate-400 mb-8">Manage your profile, preferences, and scan defaults.</p>
+
+        {/* ─── Apify API Key ─── */}
+        <div className={`border rounded-2xl p-6 mb-6 ${apifyToken ? 'bg-white border-slate-200' : 'bg-orange-50 border-orange-200'}`}>
+          <div className="flex items-start justify-between mb-1">
+            <h3 className="text-base font-semibold text-slate-900">Apify API Key</h3>
+            {apifyToken && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                Connected
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            {apifyToken
+              ? <>Current key: <code className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded text-xs">{apifyToken.slice(0, 12)}••••••••</code></>
+              : 'No API key set. Add your Apify key to start scanning.'}
+          </p>
+          <ApifySetup onSave={async (newToken) => { await saveApifyToken(newToken) }} isUpdate={true} />
+          <p className="text-xs text-slate-400 mt-3">
+            Don&apos;t have an Apify account?{' '}
+            <a href="https://apify.com/sign-up" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-600 font-medium">
+              Sign up free →
+            </a>
+          </p>
+        </div>
 
         {/* ─── Profile ─── */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-6">

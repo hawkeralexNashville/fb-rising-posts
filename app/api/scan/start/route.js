@@ -98,13 +98,17 @@ export async function POST(request) {
     const { pageUrls, timeWindowHours, platform = 'facebook', scanType = 'rising' } = await request.json()
 
     if (!pageUrls?.length) return NextResponse.json({ error: 'No URLs provided' }, { status: 400 })
-    if (!process.env.APIFY_API_TOKEN) return NextResponse.json({ error: 'Apify API token not configured.' }, { status: 500 })
+
+    // Use the user's own Apify token
+    const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
+    const apifyApiToken = settingsRow?.apify_api_token
+    if (!apifyApiToken) return NextResponse.json({ error: 'No Apify API key found. Go to Settings to add your key.', userMessage: 'No Apify API key found. Go to Settings to add your key.' }, { status: 400 })
 
     const resultsLimit = getResultsLimit(timeWindowHours || 24, scanType)
     const { actorId, input } = getActorConfig(platform, pageUrls, resultsLimit, timeWindowHours || 24, scanType)
 
     const apifyRes = await fetch(
-      `https://api.apify.com/v2/acts/${actorId}/runs?token=${process.env.APIFY_API_TOKEN}`,
+      `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyApiToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
