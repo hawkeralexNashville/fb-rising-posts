@@ -128,8 +128,8 @@ export async function GET(request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Get user's own Apify token
-    const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
+    // Get user settings (Apify token + scan settings)
+    const { data: settingsRow } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single()
     const apifyApiToken = settingsRow?.apify_api_token
     if (!apifyApiToken) return NextResponse.json({ error: 'No Apify API key found.' }, { status: 400 })
 
@@ -153,7 +153,6 @@ export async function GET(request) {
     const totalScraped = normalizedPosts.length
 
     // Load settings
-    const { data: settingsRow } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single()
     const settings = { min_velocity: settingsRow?.min_velocity ?? 50, min_delta: settingsRow?.min_delta ?? 20 }
 
     // Load previous snapshots
