@@ -147,6 +147,7 @@ const MAX_INTERACTION_OPTIONS = [
 function timeAgo(dateStr) { if (!dateStr) return ''; const diff = (Date.now() - new Date(dateStr).getTime()) / 1000; if (diff < 60) return 'just now'; if (diff < 3600) return `${Math.floor(diff / 60)}m ago`; if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`; return `${Math.floor(diff / 86400)}d ago` }
 function formatNumber(n) { if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'; if (n >= 1000) return (n / 1000).toFixed(1) + 'K'; return n?.toString() || '0' }
 function formatDate(dateStr) { const d = new Date(dateStr); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }
+function formatScanLabel(dateStr) { if (!dateStr) return 'Scan'; const d = new Date(dateStr); return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }
 const selectStyle = { backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }
 
 // ─── Platform Tabs ───
@@ -1045,7 +1046,7 @@ export default function Dashboard({ supabase, session }) {
               {savedScans.map((scan) => (
                 <div key={scan.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'saved' && selectedSavedScan?.id === scan.id ? 'bg-violet-500/20 text-violet-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
                   onClick={() => loadSavedScan(scan.id)}>
-                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.folder}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{scan.name}</span><span className="text-xs text-gray-500">{scan.rising_count} rising · {timeAgo(scan.created_at)}</span></div></div>
+                  <div className="flex items-center gap-2.5 min-w-0"><span className="shrink-0">{Icons.folder}</span><div className="min-w-0"><span className="text-sm font-medium block truncate">{formatScanLabel(scan.created_at)}</span><span className="text-xs text-gray-500">{scan.rising_count} rising · {timeAgo(scan.created_at)}</span></div></div>
                   <button onClick={(e) => { e.stopPropagation(); deleteSavedScan(scan.id) }} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all shrink-0 ml-1">{Icons.trash}</button>
                 </div>
               ))}
@@ -1132,7 +1133,7 @@ export default function Dashboard({ supabase, session }) {
                           </div>
                           <span className="text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity">{Icons.link}</span>
                         </div>
-                        <h3 className="text-sm font-semibold text-gray-100 mb-2 line-clamp-2 leading-snug">{scan.name}</h3>
+                        <h3 className="text-sm font-semibold text-gray-100 mb-2 leading-snug">{formatScanLabel(scan.created_at)}</h3>
                         <div className="flex items-center gap-3 text-xs text-gray-500">
                           <span>{timeAgo(scan.created_at)}</span>
                           <span>·</span>
@@ -1194,7 +1195,7 @@ export default function Dashboard({ supabase, session }) {
         {view === 'saved' && selectedSavedScan && (
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 sm:p-6 max-w-4xl">
-              <div className="flex items-center gap-2 mb-1"><span className="text-violet-400">{Icons.folder}</span><h2 className="text-2xl font-bold text-white">{selectedSavedScan.name}</h2></div>
+              <div className="flex items-center gap-2 mb-1"><span className="text-violet-400">{Icons.folder}</span><h2 className="text-2xl font-bold text-white">{formatScanLabel(selectedSavedScan.created_at)}</h2></div>
               <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
                 <span>{formatDate(selectedSavedScan.created_at)}</span><span>·</span>
                 <span>{TIME_OPTIONS.find(t => t.value === selectedSavedScan.time_window)?.label || `${selectedSavedScan.time_window}h`}</span><span>·</span>
