@@ -28,9 +28,14 @@ export default function Auth({ supabase, initialMode = 'login' }) {
       if (error) setError(error.message)
       else setMessage('Password reset link sent! Check your email.')
     } else if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) setError(error.message)
-      else setMessage('Account created! Check your email to confirm your address.')
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        setError(error.message)
+      } else if (data?.user?.identities?.length === 0) {
+        setError('An account with this email already exists. Please sign in instead.')
+      } else {
+        setMessage('Account created! Check your email to confirm your address.')
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError(error.message)
