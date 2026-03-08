@@ -458,6 +458,7 @@ export default function Dashboard({ supabase, session }) {
   const userId = session?.user?.id
   // undefined = not checked yet, null = checked but missing, string = set
   const [apifyToken, setApifyToken] = useState(undefined)
+  const [showApifyModal, setShowApifyModal] = useState(false)
   // Share state
   const [shareModal, setShareModal] = useState(null) // null | { url: string }
   const [sharingLoading, setSharingLoading] = useState(false)
@@ -735,6 +736,7 @@ export default function Dashboard({ supabase, session }) {
   }
 
   async function runScan(pageUrls, streamId, platform, setStatus, setMessage, setResults, setStats, source) {
+    if (!apifyToken) { setShowApifyModal(true); return }
     abortRef.current = false
     const scanId = Date.now()
     const scanLabel = source || streams.find(s => s.id === streamId)?.name || 'Quick Scan'
@@ -894,6 +896,7 @@ export default function Dashboard({ supabase, session }) {
   const isGroupScanning = ['starting', 'scanning', 'processing'].includes(groupScanStatus)
 
   async function startGroupScan() {
+    if (!apifyToken) { setShowApifyModal(true); return }
     if (groupPages.length === 0) { setGroupScanMessage('Add some groups first.'); setGroupScanStatus('error'); return }
     abortRef.current = false
     const scanId = Date.now()
@@ -965,9 +968,6 @@ export default function Dashboard({ supabase, session }) {
     </div>
   )
 
-  // No Apify token set — show onboarding
-  if (!apifyToken) return <ApifySetup onSave={saveApifyToken} />
-
   return (
     <div className="min-h-screen flex bg-gray-950">
       {toast && (
@@ -976,6 +976,28 @@ export default function Dashboard({ supabase, session }) {
         </div>
       )}
       {shareModal && <ShareModal shareUrl={shareModal.url} onClose={() => setShareModal(null)} />}
+
+      {/* ─── Apify key modal ─── */}
+      {showApifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">Connect your Apify account</h3>
+                <p className="text-sm text-gray-400 mt-1">You need an Apify API key to run scans. It&apos;s free to sign up.</p>
+              </div>
+              <button onClick={() => setShowApifyModal(false)} className="text-gray-500 hover:text-gray-300 ml-4 mt-0.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <ApifySetup onSave={async (token) => { await saveApifyToken(token); setShowApifyModal(false) }} isUpdate={true} />
+            <p className="text-xs text-gray-600 mt-3">
+              Don&apos;t have an account?{' '}
+              <a href="https://apify.com/sign-up" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400">Sign up free →</a>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ─── Mobile overlay backdrop ─── */}
       {sidebarOpen && (
