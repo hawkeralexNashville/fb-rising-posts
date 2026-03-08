@@ -2,6 +2,18 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 // ─── Platform-specific normalization ───
+function extractFacebookImage(post) {
+  // Try multiple known Apify facebook-posts-scraper field paths
+  return (
+    post.topImage ||
+    post.media?.[0]?.photo_images?.[0]?.uri ||
+    post.media?.[0]?.photo_image?.uri ||
+    post.attachments?.[0]?.media?.image?.uri ||
+    post.images?.[0] ||
+    null
+  )
+}
+
 function normalizeFacebook(post) {
   const reactions = post.likesCount || post.likes || post.reactionsCount || post.reactions || 0
   const comments = post.commentsCount || post.comments || post.numberOfComments || 0
@@ -10,6 +22,7 @@ function normalizeFacebook(post) {
     post_id: post.postId || post.id || post.postUrl || post.url || Math.random().toString(36).slice(2),
     post_url: post.postUrl || post.url || post.link || '',
     content_preview: (post.postText || post.text || post.message || post.body || '').slice(0, 500),
+    image_url: extractFacebookImage(post),
     reactions,
     comments,
     shares,
@@ -29,10 +42,17 @@ function normalizeX(post) {
   const retweets = post.retweetCount || post.retweets || 0
   const replies = post.replyCount || post.replies || 0
   const views = post.viewCount || post.views || 0
+  const image_url =
+    post.extendedEntities?.media?.[0]?.media_url_https ||
+    post.entities?.media?.[0]?.media_url_https ||
+    post.media?.[0]?.media_url_https ||
+    post.media?.[0]?.preview_image_url ||
+    null
   return {
     post_id: post.id || post.tweetId || post.url || Math.random().toString(36).slice(2),
     post_url: post.url || post.tweetUrl || '',
     content_preview: (post.text || post.fullText || post.tweetText || '').slice(0, 500),
+    image_url,
     reactions: likes,
     comments: replies,
     shares: retweets,
@@ -52,10 +72,16 @@ function normalizeReddit(post) {
   const upvotes = post.upVotes || post.score || post.ups || 0
   const comments = post.numberOfComments || post.commentCount || post.numComments || 0
   const awards = post.totalAwards || post.awardsCount || 0
+  // Reddit preview URLs use HTML entities — decode &amp; before using
+  const rawPreview = post.preview?.images?.[0]?.source?.url
+  const previewUrl = rawPreview ? rawPreview.replace(/&amp;/g, '&') : null
+  const thumbUrl = post.thumbnail && !['self', 'default', 'nsfw', 'spoiler', ''].includes(post.thumbnail) ? post.thumbnail : null
+  const image_url = previewUrl || thumbUrl || null
   return {
     post_id: post.id || post.url || Math.random().toString(36).slice(2),
     post_url: post.url || '',
     content_preview: (post.title || post.text || post.body || '').slice(0, 500),
+    image_url,
     reactions: upvotes,
     comments,
     shares: awards,

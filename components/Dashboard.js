@@ -272,6 +272,17 @@ function RisingPostsList({ posts, session }) {
               {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-600 hover:text-orange-400 transition-colors">{Icons.link}</a>}
             </div>
             {post.content_preview && <p className="text-base text-gray-200 mb-3 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
+            {post.image_url && (
+              <div className="mb-3 rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+                <img
+                  src={post.image_url}
+                  alt=""
+                  className="w-full max-h-72 object-cover"
+                  loading="lazy"
+                  onError={(e) => { e.currentTarget.parentElement.style.display = 'none' }}
+                />
+              </div>
+            )}
             {post.reason && (
               <div className="mb-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-2.5">
                 <p className="text-xs leading-relaxed text-orange-300"><span className="font-semibold text-orange-400">⚡ Why this post:</span> {post.reason}</p>
