@@ -587,7 +587,7 @@ export default function Dashboard({ supabase, session }) {
     } catch (err) { showToast('Relevance scoring failed', 'error') }
     setRelevanceScoring(false)
   }
-  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true); setApifyToken(data.apify_api_token || null) } else { setApifyToken(null) } }
+  async function loadSettings() { const { data } = await supabase.from('user_settings').select('*').eq('user_id', userId).single(); if (data) { setSettings({ min_velocity: data.min_velocity, min_delta: data.min_delta }); if (data.max_post_age_hours) setTimeWindow(data.max_post_age_hours); if (data.is_admin) setIsAdmin(true); setApifyToken(data.apify_api_token || null); if (data.group_min_comments != null) setGroupMinComments(data.group_min_comments); if (data.group_min_reactions != null) setGroupMinReactions(data.group_min_reactions) } else { setApifyToken(null) } }
 
   async function saveApifyToken(token) { const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update({ apify_api_token: token }).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, apify_api_token: token }) }; setApifyToken(token) }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
@@ -623,7 +623,7 @@ export default function Dashboard({ supabase, session }) {
     setSelectedPublicStream(null)
     showToast(`Cloned "${newStream.name}" with ${publicPages.length} pages!`)
   }
-  async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
+  async function saveSettings() { const payload = { ...settings, max_post_age_hours: timeWindow, group_min_comments: groupMinComments, group_min_reactions: groupMinReactions, updated_at: new Date().toISOString() }; const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update(payload).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, ...payload }) } }
 
   async function createStream(e) { e.preventDefault(); if (!newStreamName.trim()) return; const { data, error } = await supabase.from('streams').insert({ user_id: userId, name: newStreamName.trim(), type: 'rising' }).select().single(); if (!error && data) { setStreams([...streams, data]); setSelectedStreamId(data.id); setNewStreamName(''); setShowAddStream(false) } }
   async function deleteStream(id) { if (!confirm('Delete this stream and all its pages?')) return; await supabase.from('streams').delete().eq('id', id); setStreams(streams.filter((s) => s.id !== id)); if (selectedStreamId === id) { const r = streams.filter((s) => s.id !== id); setSelectedStreamId(r.length ? r[0].id : null) } }
@@ -1141,7 +1141,7 @@ export default function Dashboard({ supabase, session }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
           </button>
         </div>
-        {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} streams={streams} savedScans={savedScans} apifyToken={apifyToken} saveApifyToken={saveApifyToken} />}
+        {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} groupMinComments={groupMinComments} setGroupMinComments={setGroupMinComments} groupMinReactions={groupMinReactions} setGroupMinReactions={setGroupMinReactions} streams={streams} savedScans={savedScans} apifyToken={apifyToken} saveApifyToken={saveApifyToken} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
 
         {/* ─── Recent Scans Grid ─── */}
