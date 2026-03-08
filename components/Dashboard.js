@@ -989,7 +989,14 @@ export default function Dashboard({ supabase, session }) {
               </div>
             </form>
           )}
-          {streams.length === 0 && !showAddStream && <p className="text-sm text-gray-500 mt-2">No streams yet.</p>}
+          {streams.length === 0 && !showAddStream && (
+            <button
+              onClick={() => setShowAddStream(true)}
+              className="w-full mt-2 px-3 py-3 rounded-xl border-2 border-dashed border-gray-700 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-500 hover:text-orange-400 text-xs font-medium transition-all text-center"
+            >
+              + Create your first stream
+            </button>
+          )}
           {streams.map((stream) => (
             <div key={stream.id} className={`group flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-colors ${view === 'streams' && selectedStreamId === stream.id ? 'bg-orange-500/20 text-orange-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
               onClick={() => { setView('streams'); setSelectedStreamId(stream.id); setSelectedSavedScan(null) }}>
@@ -1267,11 +1274,77 @@ export default function Dashboard({ supabase, session }) {
 
         {/* ─── Streams Empty ─── */}
         {view === 'streams' && !selectedStream && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mx-auto mb-4 text-gray-600">{Icons.stream}</div>
-              <p className="text-base text-gray-500">{streams.length === 0 ? 'Create your first stream to get started.' : 'Select a stream from the sidebar.'}</p>
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+            {streams.length === 0 ? (
+              /* ── Brand new user onboarding ── */
+              <div className="max-w-xl mx-auto mt-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/25">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Welcome to Rising Posts</h2>
+                  <p className="text-gray-400 text-base leading-relaxed">
+                    Streams are groups of pages you want to monitor together. Create one, add some pages, and scan — you'll see which posts are rising fastest right now.
+                  </p>
+                </div>
+
+                {/* Steps */}
+                <div className="space-y-3 mb-8">
+                  {[
+                    { n: '1', title: 'Create a stream', desc: 'Give it a name — e.g. "Competitors", "Finance News", "Local Pages"' },
+                    { n: '2', title: 'Add pages to it', desc: 'Paste any public Facebook, Reddit, or X page URL' },
+                    { n: '3', title: 'Hit Scan', desc: 'See which posts are gaining the most traction right now, ranked by velocity' },
+                  ].map(({ n, title, desc }) => (
+                    <div key={n} className="flex items-start gap-4 bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-bold text-orange-400">{n}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white mb-0.5">{title}</p>
+                        <p className="text-sm text-gray-500">{desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setShowAddStream(true)}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 rounded-2xl text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-orange-500/40 hover:-translate-y-0.5"
+                >
+                  Create your first stream →
+                </button>
+                <p className="text-center text-xs text-gray-600 mt-3">You can create as many streams as you need</p>
+              </div>
+            ) : (
+              /* ── Has streams, none selected ── */
+              <div className="max-w-xl mx-auto mt-8">
+                <p className="text-sm font-semibold text-gray-400 mb-3">Your streams</p>
+                <div className="space-y-2">
+                  {streams.map(stream => (
+                    <button
+                      key={stream.id}
+                      onClick={() => { setView('streams'); setSelectedStreamId(stream.id) }}
+                      className="w-full flex items-center justify-between px-4 py-3.5 bg-gray-900 border border-gray-800 hover:border-orange-500/30 hover:bg-orange-500/5 rounded-2xl transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 group-hover:text-orange-400 transition-colors">{Icons.stream}</div>
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-white">{stream.name}</p>
+                          {stream.is_public && <p className="text-xs text-emerald-400">Public</p>}
+                        </div>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-600 group-hover:text-orange-400 transition-colors"><polyline points="9 18 15 12 9 6" /></svg>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowAddStream(true)}
+                  className="w-full mt-3 py-3 rounded-xl border-2 border-dashed border-gray-700 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-500 hover:text-orange-400 text-sm font-medium transition-all"
+                >
+                  + New stream
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1365,6 +1438,23 @@ export default function Dashboard({ supabase, session }) {
                 )}
               </div>
 
+              {pages.length === 0 && (
+                <div className="mb-5 bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0 text-orange-400">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white mb-1">Add pages to start scanning</p>
+                    <p className="text-sm text-gray-400 mb-3">Paste any public Facebook page, Reddit community, or X account you want to track.</p>
+                    <button
+                      onClick={() => { setShowAddPage(true); setShowPages(false) }}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-sm font-semibold text-white transition-colors"
+                    >
+                      + Add your first page
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="mb-5">
                 <ScanControls timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} onScan={startStreamScan} isScanning={isScanning} disabled={pages.length === 0} onStop={stopScan} costRates={costRates} pageCount={pages.length} />
               </div>
