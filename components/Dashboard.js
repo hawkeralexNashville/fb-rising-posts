@@ -480,11 +480,11 @@ export default function Dashboard({ supabase, session }) {
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
   async function loadNotifSettings(streamId) {
     const { data } = await supabase.from('stream_notifications').select('*').eq('stream_id', streamId).eq('user_id', userId).single()
-    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [], schedule_mode: 'specific_times', interval_minutes: 60, send_days: [0,1,2,3,4,5,6], active_hours_start: 0, active_hours_end: 23 })
+    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [], schedule_mode: 'specific_times', interval_minutes: 60, send_days: [0,1,2,3,4,5,6], active_hours_start: 0, active_hours_end: 23, ai_filter_enabled: true })
   }
   async function saveNotifSettings(updated) {
     setNotifSaving(true)
-    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], active_hours_start: updated.active_hours_start ?? 0, active_hours_end: updated.active_hours_end ?? 23, updated_at: new Date().toISOString() }
+    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], active_hours_start: updated.active_hours_start ?? 0, active_hours_end: updated.active_hours_end ?? 23, ai_filter_enabled: updated.ai_filter_enabled ?? true, updated_at: new Date().toISOString() }
     const { data: existing } = await supabase.from('stream_notifications').select('id').eq('stream_id', selectedStreamId).eq('user_id', userId).single()
     let error
     if (existing) {
@@ -1661,6 +1661,18 @@ export default function Dashboard({ supabase, session }) {
                             className="w-24 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-orange-400" />
                         </div>
                       </div>
+                      {/* AI filter toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div>
+                          <div className="text-sm font-medium text-gray-300">AI Relevance Filter</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Scores posts against your audience profile and removes anything below 6/10 — may reduce results</div>
+                        </div>
+                        <button onClick={() => setNotifSettings({ ...notifSettings, ai_filter_enabled: !(notifSettings.ai_filter_enabled ?? true) })}
+                          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4 ${(notifSettings.ai_filter_enabled ?? true) ? 'bg-indigo-500' : 'bg-gray-700'}`}>
+                          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${(notifSettings.ai_filter_enabled ?? true) ? 'left-6' : 'left-1'}`} />
+                        </button>
+                      </div>
+
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Send to (one email per line)</label>
                         <textarea value={(notifSettings.emails || []).join('\n')} onChange={(e) => setNotifSettings({ ...notifSettings, emails: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}

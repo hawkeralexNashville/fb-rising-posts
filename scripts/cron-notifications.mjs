@@ -436,15 +436,18 @@ async function main() {
       console.log(`  ${rising.length} rising posts found`)
 
       // AI relevance scoring
+      const aiFilterEnabled = notif.ai_filter_enabled !== false // default true
       const audienceProfile = await getStreamAudienceProfile(notif.stream_id)
       let emailPosts = rising
       let relevanceFiltered = 0
-      if (audienceProfile && rising.length > 0) {
+      if (aiFilterEnabled && audienceProfile && rising.length > 0) {
         console.log('  Running AI relevance scoring...')
         const scored = await scoreRelevance(rising, audienceProfile)
         emailPosts = scored.filter(p => p.relevance_score === null || p.relevance_score >= 6)
         relevanceFiltered = rising.length - emailPosts.length
         console.log(`  ${emailPosts.length} relevant, ${relevanceFiltered} filtered out`)
+      } else if (!aiFilterEnabled) {
+        console.log('  AI filter disabled, sending all rising posts')
       }
 
       // Send email
