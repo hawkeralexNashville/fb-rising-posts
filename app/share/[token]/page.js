@@ -254,6 +254,12 @@ function PostCard({ post, postStrategy }) {
         <p className="text-base text-gray-200 mb-3 line-clamp-3 leading-relaxed">{post.content_preview}</p>
       )}
 
+      {post.image_url && (
+        <div className="mb-3 rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+          <img src={post.image_url} alt="" className="w-full max-h-72 object-cover" loading="lazy" onError={(e) => { e.currentTarget.parentElement.style.display = 'none' }} />
+        </div>
+      )}
+
       {post.reason && (
         <div className="mb-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-2.5">
           <p className="text-xs leading-relaxed text-orange-300">
@@ -325,6 +331,13 @@ function GroupPostCard({ post }) {
         )}
       </div>
       <p className="text-gray-200 text-base leading-relaxed mb-3">{post.content_preview}</p>
+
+      {post.image_url && (
+        <div className="mb-3 rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+          <img src={post.image_url} alt="" className="w-full max-h-72 object-cover" loading="lazy" onError={(e) => { e.currentTarget.parentElement.style.display = 'none' }} />
+        </div>
+      )}
+
       {post.reason && (
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3 mb-3">
           <p className="text-sm text-blue-300"><span className="font-semibold">📝 Why this post:</span> {post.reason}</p>
