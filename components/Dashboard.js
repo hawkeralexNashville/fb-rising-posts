@@ -480,11 +480,11 @@ export default function Dashboard({ supabase, session }) {
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
   async function loadNotifSettings(streamId) {
     const { data } = await supabase.from('stream_notifications').select('*').eq('stream_id', streamId).eq('user_id', userId).single()
-    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [], schedule_mode: 'specific_times', interval_minutes: 60, send_days: [0,1,2,3,4,5,6] })
+    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [], schedule_mode: 'specific_times', interval_minutes: 60, send_days: [0,1,2,3,4,5,6], active_hours_start: 0, active_hours_end: 23 })
   }
   async function saveNotifSettings(updated) {
     setNotifSaving(true)
-    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], updated_at: new Date().toISOString() }
+    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], active_hours_start: updated.active_hours_start ?? 0, active_hours_end: updated.active_hours_end ?? 23, updated_at: new Date().toISOString() }
     const { data: existing } = await supabase.from('stream_notifications').select('id').eq('stream_id', selectedStreamId).eq('user_id', userId).single()
     let error
     if (existing) {
@@ -1524,7 +1524,15 @@ export default function Dashboard({ supabase, session }) {
                     <span>{notifSettings.enabled ? '🔔' : '🔕'}</span>
                     <span>{notifSettings.enabled ? (
                       notifSettings.schedule_mode === 'interval'
-                        ? `Sends every ${notifSettings.interval_minutes >= 60 ? `${notifSettings.interval_minutes / 60}hr` : `${notifSettings.interval_minutes}min`} → ${(notifSettings.emails || []).join(', ') || 'no emails set'}`
+                        ? (() => {
+                            const freq = notifSettings.interval_minutes >= 60 ? `${notifSettings.interval_minutes / 60}hr` : `${notifSettings.interval_minutes}min`
+                            const start = notifSettings.active_hours_start ?? 0
+                            const end = notifSettings.active_hours_end ?? 23
+                            const allDay = start === 0 && end === 23
+                            const fmtH = h => { const hh = h % 12 || 12; return `${hh}${h < 12 ? 'am' : 'pm'}` }
+                            const hours = allDay ? '' : ` · ${fmtH(start)}–${fmtH(end)} CST`
+                            return `Every ${freq}${hours} → ${(notifSettings.emails || []).join(', ') || 'no emails set'}`
+                          })()
                         : `Sends at ${(notifSettings.send_times || []).join(', ') || 'no times set'} CST → ${(notifSettings.emails || []).join(', ') || 'no emails set'}`
                     ) : 'Email notifications off'}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-auto transition-transform ${showNotifSettings ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
@@ -1611,6 +1619,34 @@ export default function Dashboard({ supabase, session }) {
                           })}
                         </div>
                       </div>
+
+                      {/* Active hours — only for interval mode */}
+                      {notifSettings.schedule_mode === 'interval' && (
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Active Hours (CST)</label>
+                          <div className="flex items-center gap-2">
+                            <select value={notifSettings.active_hours_start ?? 0} onChange={(e) => setNotifSettings({ ...notifSettings, active_hours_start: parseInt(e.target.value) })}
+                              className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer" style={selectStyle}>
+                              {Array.from({ length: 24 }, (_, i) => {
+                                const h = i % 12 || 12; const p = i < 12 ? 'AM' : 'PM'
+                                return <option key={i} value={i}>{`${h}:00 ${p}`}</option>
+                              })}
+                            </select>
+                            <span className="text-gray-500 text-xs font-medium">to</span>
+                            <select value={notifSettings.active_hours_end ?? 23} onChange={(e) => setNotifSettings({ ...notifSettings, active_hours_end: parseInt(e.target.value) })}
+                              className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-orange-400 appearance-none cursor-pointer" style={selectStyle}>
+                              {Array.from({ length: 24 }, (_, i) => {
+                                const h = i % 12 || 12; const p = i < 12 ? 'AM' : 'PM'
+                                return <option key={i} value={i}>{`${h}:00 ${p}`}</option>
+                              })}
+                            </select>
+                          </div>
+                          {(notifSettings.active_hours_start ?? 0) === 0 && (notifSettings.active_hours_end ?? 23) === 23
+                            ? <p className="text-xs text-gray-500 mt-1.5">Sending all day</p>
+                            : <p className="text-xs text-gray-500 mt-1.5">Only sends between these hours CST</p>
+                          }
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-3">
                         <div>
                           <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Time Window</label>
