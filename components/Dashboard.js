@@ -486,13 +486,21 @@ export default function Dashboard({ supabase, session }) {
     setNotifSaving(true)
     const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], updated_at: new Date().toISOString() }
     const { data: existing } = await supabase.from('stream_notifications').select('id').eq('stream_id', selectedStreamId).eq('user_id', userId).single()
+    let error
     if (existing) {
-      await supabase.from('stream_notifications').update(payload).eq('id', existing.id)
+      const res = await supabase.from('stream_notifications').update(payload).eq('id', existing.id)
+      error = res.error
     } else {
-      await supabase.from('stream_notifications').insert(payload)
+      const res = await supabase.from('stream_notifications').insert(payload)
+      error = res.error
+    }
+    setNotifSaving(false)
+    if (error) {
+      console.error('Failed to save notification settings:', error)
+      showToast('Failed to save: ' + error.message, 'error')
+      return
     }
     setNotifSettings(updated)
-    setNotifSaving(false)
     showToast('Notification settings saved!')
   }
   async function sendNotifNow() {
