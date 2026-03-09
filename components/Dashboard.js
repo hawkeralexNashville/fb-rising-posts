@@ -480,11 +480,11 @@ export default function Dashboard({ supabase, session }) {
   async function loadPages(streamId) { const { data } = await supabase.from('monitored_pages').select('*').eq('stream_id', streamId).order('created_at', { ascending: true }); setPages(data || []) }
   async function loadNotifSettings(streamId) {
     const { data } = await supabase.from('stream_notifications').select('*').eq('stream_id', streamId).eq('user_id', userId).single()
-    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [] })
+    setNotifSettings(data || { enabled: false, frequency_hours: 2, min_interactions: 50, time_window_hours: 6, emails: [], send_times: [], schedule_mode: 'specific_times', interval_minutes: 60, send_days: [0,1,2,3,4,5,6] })
   }
   async function saveNotifSettings(updated) {
     setNotifSaving(true)
-    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], updated_at: new Date().toISOString() }
+    const payload = { stream_id: selectedStreamId, user_id: userId, enabled: updated.enabled, frequency_hours: updated.frequency_hours, min_interactions: updated.min_interactions, time_window_hours: updated.time_window_hours, emails: updated.emails, send_times: updated.send_times || [], schedule_mode: updated.schedule_mode || 'specific_times', interval_minutes: updated.interval_minutes || 60, send_days: updated.send_days ?? [0,1,2,3,4,5,6], updated_at: new Date().toISOString() }
     const { data: existing } = await supabase.from('stream_notifications').select('id').eq('stream_id', selectedStreamId).eq('user_id', userId).single()
     if (existing) {
       await supabase.from('stream_notifications').update(payload).eq('id', existing.id)
@@ -1514,7 +1514,11 @@ export default function Dashboard({ supabase, session }) {
                   <button onClick={() => setShowNotifSettings(!showNotifSettings)}
                     className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl border text-sm font-medium transition-all ${notifSettings.enabled ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-800'}`}>
                     <span>{notifSettings.enabled ? '🔔' : '🔕'}</span>
-                    <span>{notifSettings.enabled ? `Sends at ${(notifSettings.send_times || []).join(', ') || 'no times set'} CST → ${(notifSettings.emails || []).join(', ') || 'no emails set'}` : 'Email notifications off'}</span>
+                    <span>{notifSettings.enabled ? (
+                      notifSettings.schedule_mode === 'interval'
+                        ? `Sends every ${notifSettings.interval_minutes >= 60 ? `${notifSettings.interval_minutes / 60}hr` : `${notifSettings.interval_minutes}min`} → ${(notifSettings.emails || []).join(', ') || 'no emails set'}`
+                        : `Sends at ${(notifSettings.send_times || []).join(', ') || 'no times set'} CST → ${(notifSettings.emails || []).join(', ') || 'no emails set'}`
+                    ) : 'Email notifications off'}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-auto transition-transform ${showNotifSettings ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
                   </button>
                   {showNotifSettings && (
@@ -1522,24 +1526,82 @@ export default function Dashboard({ supabase, session }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-gray-200">Automatic Email Reports</div>
-                          <div className="text-xs text-gray-500 mt-0.5">Runs a scan and emails rising posts at specific times (CST)</div>
+                          <div className="text-xs text-gray-500 mt-0.5">Runs a scan and emails rising posts on your schedule (CST)</div>
                         </div>
                         <button onClick={() => { const updated = { ...notifSettings, enabled: !notifSettings.enabled }; saveNotifSettings(updated) }}
                           className={`relative w-11 h-6 rounded-full transition-colors ${notifSettings.enabled ? 'bg-emerald-500' : 'bg-gray-700'}`}>
                           <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${notifSettings.enabled ? 'left-6' : 'left-1'}`} />
                         </button>
                       </div>
+
+                      {/* Schedule mode toggle */}
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Send Times (CST)</label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {['6:00 AM', '8:00 AM', '10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM', '6:00 PM', '8:00 PM'].map(t => {
-                            const times = notifSettings.send_times || []
-                            const active = times.includes(t)
-                            return <button key={t} onClick={() => setNotifSettings({ ...notifSettings, send_times: active ? times.filter(x => x !== t) : [...times, t].sort((a, b) => { const toMin = s => { const [h, mp] = s.split(':'); const [m, p] = mp.split(' '); return (p === 'PM' && parseInt(h) !== 12 ? parseInt(h) + 12 : p === 'AM' && parseInt(h) === 12 ? 0 : parseInt(h)) * 60 + parseInt(m) }; return toMin(a) - toMin(b) }) })}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${active ? 'bg-orange-500 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'}`}>{t}</button>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Schedule Type</label>
+                        <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
+                          {[{ value: 'specific_times', label: 'Specific Times' }, { value: 'interval', label: 'Interval' }].map(opt => (
+                            <button key={opt.value} onClick={() => setNotifSettings({ ...notifSettings, schedule_mode: opt.value })}
+                              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${notifSettings.schedule_mode === opt.value ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'}`}>
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Specific times */}
+                      {(notifSettings.schedule_mode === 'specific_times' || !notifSettings.schedule_mode) && (
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Send Times (CST)</label>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {['6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'].map(t => {
+                              const times = notifSettings.send_times || []
+                              const active = times.includes(t)
+                              return <button key={t} onClick={() => setNotifSettings({ ...notifSettings, send_times: active ? times.filter(x => x !== t) : [...times, t].sort((a, b) => { const toMin = s => { const [h, mp] = s.split(':'); const [m, p] = mp.split(' '); return (p === 'PM' && parseInt(h) !== 12 ? parseInt(h) + 12 : p === 'AM' && parseInt(h) === 12 ? 0 : parseInt(h)) * 60 + parseInt(m) }; return toMin(a) - toMin(b) }) })}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${active ? 'bg-orange-500 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'}`}>{t}</button>
+                            })}
+                          </div>
+                          <p className="text-xs text-gray-500">{(notifSettings.send_times || []).length === 0 ? 'Click times above to select when to receive reports' : `Selected: ${(notifSettings.send_times || []).join(', ')} CST`}</p>
+                        </div>
+                      )}
+
+                      {/* Interval */}
+                      {notifSettings.schedule_mode === 'interval' && (
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Send Every</label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { label: '30 min', value: 30 },
+                              { label: '1 hour', value: 60 },
+                              { label: '2 hours', value: 120 },
+                              { label: '3 hours', value: 180 },
+                              { label: '4 hours', value: 240 },
+                              { label: '6 hours', value: 360 },
+                              { label: '8 hours', value: 480 },
+                              { label: '12 hours', value: 720 },
+                            ].map(opt => (
+                              <button key={opt.value} onClick={() => setNotifSettings({ ...notifSettings, interval_minutes: opt.value })}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${notifSettings.interval_minutes === opt.value ? 'bg-orange-500 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'}`}>
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Days of week */}
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Active Days</label>
+                        <div className="flex gap-1.5">
+                          {[{ label: 'Su', value: 0 }, { label: 'Mo', value: 1 }, { label: 'Tu', value: 2 }, { label: 'We', value: 3 }, { label: 'Th', value: 4 }, { label: 'Fr', value: 5 }, { label: 'Sa', value: 6 }].map(day => {
+                            const days = notifSettings.send_days ?? [0,1,2,3,4,5,6]
+                            const active = days.includes(day.value)
+                            return (
+                              <button key={day.value} onClick={() => setNotifSettings({ ...notifSettings, send_days: active ? days.filter(d => d !== day.value) : [...days, day.value].sort() })}
+                                className={`w-9 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-orange-500 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}>
+                                {day.label}
+                              </button>
+                            )
                           })}
                         </div>
-                        <p className="text-xs text-gray-500">{(notifSettings.send_times || []).length === 0 ? 'Click times above to select when to receive reports' : `Selected: ${(notifSettings.send_times || []).join(', ')} CST`}</p>
                       </div>
                       <div className="flex flex-wrap gap-3">
                         <div>

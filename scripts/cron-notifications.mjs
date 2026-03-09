@@ -48,27 +48,46 @@ function parseTimeToHour(timeStr) {
   return h
 }
 
+function isDayAllowed(nowCST, sendDays) {
+  // sendDays: array of 0-6 (0=Sun, 6=Sat). If null/empty, all days allowed.
+  if (!sendDays || sendDays.length === 0) return true
+  return sendDays.includes(nowCST.getDay())
+}
+
 async function getDueNotifications() {
-  // Get current hour in CST (America/Chicago)
+  // Get current time in CST (America/Chicago)
   const nowCST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }))
   const currentHour = nowCST.getHours()
-  console.log(`Current CST hour: ${currentHour} (${nowCST.toLocaleString('en-US', { timeZone: 'America/Chicago' })})`)
+  const nowMs = Date.now()
+  console.log(`Current CST time: ${nowCST.toLocaleString('en-US', { timeZone: 'America/Chicago' })} (day ${nowCST.getDay()})`)
 
   const notifs = await supabaseQuery(
     'stream_notifications?enabled=eq.true&select=*'
   )
 
   return notifs.filter(n => {
-    const sendTimes = n.send_times || []
+    // Day-of-week check applies to all modes
+    if (!isDayAllowed(nowCST, n.send_days)) return false
 
-    // New mode: specific send times
-    if (sendTimes.length > 0) {
+    const scheduleMode = n.schedule_mode || (n.send_times?.length > 0 ? 'specific_times' : 'legacy')
+
+    // Interval mode: send every N minutes
+    if (scheduleMode === 'interval') {
+      const intervalMs = (n.interval_minutes || 60) * 60000
+      if (!n.last_sent_at) return true
+      return nowMs - new Date(n.last_sent_at).getTime() >= intervalMs
+    }
+
+    // Specific times mode
+    if (scheduleMode === 'specific_times') {
+      const sendTimes = n.send_times || []
+      if (sendTimes.length === 0) return false
       const matchesHour = sendTimes.some(t => parseTimeToHour(t) === currentHour)
       if (!matchesHour) return false
-      // Don't send twice in the same hour
+      // Don't send twice in the same hour on the same day
       if (n.last_sent_at) {
         const lastCST = new Date(new Date(n.last_sent_at).toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-        if (lastCST.getHours() === currentHour && 
+        if (lastCST.getHours() === currentHour &&
             lastCST.toDateString() === nowCST.toDateString()) return false
       }
       return true

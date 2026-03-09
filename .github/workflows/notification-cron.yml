@@ -2,8 +2,8 @@ name: Notification Cron
 
 on:
   schedule:
-    # Runs every hour — the script itself checks which notifications are actually due
-    - cron: '0 * * * *'
+    # Runs every 30 minutes — the script itself checks which notifications are actually due
+    - cron: '*/30 * * * *'
   workflow_dispatch: # Allow manual trigger for testing
 
 jobs:
