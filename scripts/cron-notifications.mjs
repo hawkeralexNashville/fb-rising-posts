@@ -71,8 +71,11 @@ async function getDueNotifications() {
 
     const scheduleMode = n.schedule_mode || (n.send_times?.length > 0 ? 'specific_times' : 'legacy')
 
-    // Interval mode: send every N minutes
+    // Interval mode: send every N minutes within active hours
     if (scheduleMode === 'interval') {
+      const startHour = n.active_hours_start ?? 0
+      const endHour = n.active_hours_end ?? 23
+      if (currentHour < startHour || currentHour > endHour) return false
       const intervalMs = (n.interval_minutes || 60) * 60000
       if (!n.last_sent_at) return true
       return nowMs - new Date(n.last_sent_at).getTime() >= intervalMs
