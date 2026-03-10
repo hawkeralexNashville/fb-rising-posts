@@ -51,56 +51,86 @@ function parseTimeToHour(timeStr) {
 function isDayAllowed(nowCST, sendDays) {
   // sendDays: array of 0-6 (0=Sun, 6=Sat). If null/empty, all days allowed.
   if (!sendDays || sendDays.length === 0) return true
-  return sendDays.includes(nowCST.getDay())
+  // Ensure numeric comparison — Supabase may return integers or strings
+  return sendDays.map(Number).includes(nowCST.getDay())
 }
 
 async function getDueNotifications() {
   // Get current time in CST (America/Chicago)
   const nowCST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }))
   const currentHour = nowCST.getHours()
+  const currentDay = nowCST.getDay()
   const nowMs = Date.now()
-  console.log(`Current CST time: ${nowCST.toLocaleString('en-US', { timeZone: 'America/Chicago' })} (day ${nowCST.getDay()})`)
+  console.log(`Current CST time: ${nowCST.toLocaleString('en-US', { timeZone: 'America/Chicago' })} (day=${currentDay}, hour=${currentHour})`)
 
   const notifs = await supabaseQuery(
     'stream_notifications?enabled=eq.true&select=*'
   )
 
-  return notifs.filter(n => {
-    // Day-of-week check applies to all modes
-    if (!isDayAllowed(nowCST, n.send_days)) return false
+  console.log(`Total enabled notifications found in DB: ${notifs.length}`)
+  if (notifs.length === 0) {
+    console.log('⚠️  No enabled notifications returned — check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY secrets match your production DB')
+  }
 
+  return notifs.filter(n => {
     const scheduleMode = n.schedule_mode || (n.send_times?.length > 0 ? 'specific_times' : 'legacy')
+    console.log(`\nChecking notification ${n.id}: mode=${scheduleMode}, send_days=${JSON.stringify(n.send_days)}, interval_minutes=${n.interval_minutes}, last_sent_at=${n.last_sent_at}, active_hours=${n.active_hours_start}-${n.active_hours_end}`)
+
+    // Day-of-week check applies to all modes
+    if (!isDayAllowed(nowCST, n.send_days)) {
+      console.log(`  ✗ Skipped: today is day ${currentDay}, send_days=${JSON.stringify(n.send_days)}`)
+      return false
+    }
 
     // Interval mode: send every N minutes within active hours
     if (scheduleMode === 'interval') {
       const startHour = n.active_hours_start ?? 0
       const endHour = n.active_hours_end ?? 23
-      if (currentHour < startHour || currentHour > endHour) return false
+      if (currentHour < startHour || currentHour > endHour) {
+        console.log(`  ✗ Skipped: hour ${currentHour} outside active hours ${startHour}-${endHour}`)
+        return false
+      }
       const intervalMs = (n.interval_minutes || 60) * 60000
-      if (!n.last_sent_at) return true
-      return nowMs - new Date(n.last_sent_at).getTime() >= intervalMs
+      if (!n.last_sent_at) {
+        console.log(`  ✓ Due: never sent before`)
+        return true
+      }
+      const elapsed = nowMs - new Date(n.last_sent_at).getTime()
+      const due = elapsed >= intervalMs
+      console.log(`  ${due ? '✓ Due' : '✗ Skipped'}: ${Math.round(elapsed / 60000)}min elapsed, need ${n.interval_minutes}min`)
+      return due
     }
 
     // Specific times mode
     if (scheduleMode === 'specific_times') {
       const sendTimes = n.send_times || []
-      if (sendTimes.length === 0) return false
+      if (sendTimes.length === 0) {
+        console.log(`  ✗ Skipped: no send times configured`)
+        return false
+      }
       const matchesHour = sendTimes.some(t => parseTimeToHour(t) === currentHour)
-      if (!matchesHour) return false
-      // Don't send twice in the same hour on the same day
+      if (!matchesHour) {
+        console.log(`  ✗ Skipped: hour ${currentHour} not in send times ${JSON.stringify(sendTimes)}`)
+        return false
+      }
       if (n.last_sent_at) {
         const lastCST = new Date(new Date(n.last_sent_at).toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-        if (lastCST.getHours() === currentHour &&
-            lastCST.toDateString() === nowCST.toDateString()) return false
+        if (lastCST.getHours() === currentHour && lastCST.toDateString() === nowCST.toDateString()) {
+          console.log(`  ✗ Skipped: already sent this hour`)
+          return false
+        }
       }
+      console.log(`  ✓ Due: matches send time`)
       return true
     }
 
     // Legacy mode: frequency_hours (backward compat)
-    if (!n.last_sent_at) return true
+    if (!n.last_sent_at) { console.log(`  ✓ Due (legacy): never sent`); return true }
     const lastSent = new Date(n.last_sent_at)
     const nextDue = new Date(lastSent.getTime() + n.frequency_hours * 3600000)
-    return new Date() >= nextDue
+    const due = new Date() >= nextDue
+    console.log(`  ${due ? '✓ Due' : '✗ Skipped'} (legacy): next due at ${nextDue.toISOString()}`)
+    return due
   })
 }
 
