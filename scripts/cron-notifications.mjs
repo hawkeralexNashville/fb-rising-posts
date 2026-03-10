@@ -137,7 +137,7 @@ async function getDueNotifications() {
 // ─── Get stream pages ───
 async function getStreamPages(streamId) {
   return supabaseQuery(
-    `monitored_pages?stream_id=eq.${streamId}&select=url,name`
+    `monitored_pages?stream_id=eq.${streamId}&select=url`
   )
 }
 
