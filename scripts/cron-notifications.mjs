@@ -421,6 +421,33 @@ async function updateLastSent(notifId) {
   )
 }
 
+// ─── Save scan to saved_scans ───
+async function saveScan(notif, streamName, posts, totalScraped, costUsd) {
+  const now = new Date()
+  const dateLabel = now.toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+  const name = `${streamName} — ${notif.time_window_hours}h — ${dateLabel}`
+  await supabaseQuery('saved_scans', {
+    method: 'POST',
+    prefer: 'return=minimal',
+    body: JSON.stringify({
+      user_id: notif.user_id,
+      stream_id: notif.stream_id,
+      name,
+      time_window: notif.time_window_hours,
+      min_interactions: notif.min_interactions,
+      max_interactions: 0,
+      total_scraped: totalScraped,
+      rising_count: posts.length,
+      results: posts,
+      cost_usd: costUsd,
+    }),
+  })
+}
+
 // ─── Main ───
 async function main() {
   console.log(`[${new Date().toISOString()}] Checking for due notifications...`)
@@ -489,6 +516,10 @@ async function main() {
       } else {
         console.log('  No email addresses configured, skipping send')
       }
+
+      // Save scan to saved_scans
+      await saveScan(notif, streamName, emailPosts, rawPosts.length, costUsd)
+      console.log('  Scan saved')
 
       // Update last_sent_at
       await updateLastSent(notif.id)
