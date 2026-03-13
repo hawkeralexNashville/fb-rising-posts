@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import Auth from '../components/Auth'
 import Dashboard from '../components/Dashboard'
+import Homepage from '../components/Homepage'
 import ResetPassword from '../components/ResetPassword'
 
 const supabase = createClient(
@@ -13,6 +14,8 @@ const supabase = createClient(
 export default function Home() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
   const [showResetPassword, setShowResetPassword] = useState(false)
 
   useEffect(() => {
@@ -26,6 +29,9 @@ export default function Home() {
         setSession(session)
         if (event === 'PASSWORD_RECOVERY') {
           setShowResetPassword(true)
+        }
+        if (session) {
+          setShowAuth(false)
         }
       }
     )
@@ -49,5 +55,16 @@ export default function Home() {
     return <Dashboard supabase={supabase} session={session} />
   }
 
-  return <Auth supabase={supabase} initialMode="login" />
+  if (showAuth) {
+    return <Auth supabase={supabase} initialMode={authMode} />
+  }
+
+  return (
+    <Homepage
+      session={session}
+      onSignIn={() => { setAuthMode('login'); setShowAuth(true) }}
+      onGetStarted={() => { setAuthMode('signup'); setShowAuth(true) }}
+      onSignOut={() => supabase.auth.signOut()}
+    />
+  )
 }
