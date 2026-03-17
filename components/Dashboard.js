@@ -1981,7 +1981,7 @@ export default function Dashboard({ supabase, session }) {
                           <span className="text-sm font-bold uppercase tracking-wide text-orange-400">{post.page_name}</span>
                           {post.age_hours != null && <span className="text-xs text-gray-500">({post.age_hours}h old)</span>}
                         </div>
-                        {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-400 transition-colors">{Icons.external}</a>}
+                        {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors">View Post →</a>}
                       </div>
                       <p className="text-gray-200 text-base leading-relaxed mb-3">{post.content_preview}</p>
                       {post.reason && (
