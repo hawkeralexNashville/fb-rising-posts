@@ -247,7 +247,13 @@ function ScanControls({ timeWindow, setTimeWindow, minInteractions, setMinIntera
 
 
 // ─── Rising Posts List ───
-function RisingPostsList({ posts, session }) {
+const HeartIcon = ({ filled }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+)
+
+function RisingPostsList({ posts, session, likedPostIds, onToggleLike }) {
   if (!posts || posts.length === 0) return null
   return (
     <div className="space-y-3">
@@ -258,6 +264,7 @@ function RisingPostsList({ posts, session }) {
         const m1Val = Object.values(metrics)[0] || 0
         const m2Val = Object.values(metrics)[1] || 0
         const m3Val = Object.values(metrics)[2] || 0
+        const isLiked = likedPostIds?.has(post.post_id)
         return (
           <div key={post.post_id || i} className={`border rounded-2xl p-5 animate-slide-up transition-all ${(post.tags || []).includes('early_riser') ? 'bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/20 hover:border-amber-400' : 'bg-gray-900 border-gray-700 hover:border-gray-500'}`} style={{ animationDelay: `${i * 50}ms` }}>
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -271,7 +278,14 @@ function RisingPostsList({ posts, session }) {
                 {(post.tags || []).includes('viral') && <span className="text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/50 rounded-full px-2.5 py-0.5">⚡ Viral</span>}
                 {(post.tags || []).includes('accelerating') && <span className="text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-full px-2.5 py-0.5">📈 Accelerating</span>}
               </div>
-              {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-600 hover:text-orange-400 transition-colors">{Icons.link}</a>}
+              <div className="shrink-0 flex items-center gap-2">
+                {onToggleLike && (
+                  <button onClick={() => onToggleLike(post)} className={`transition-colors ${isLiked ? 'text-rose-500' : 'text-gray-600 hover:text-rose-400'}`} title={isLiked ? 'Unlike' : 'Like'}>
+                    <HeartIcon filled={isLiked} />
+                  </button>
+                )}
+                {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-orange-400 transition-colors">{Icons.link}</a>}
+              </div>
             </div>
             {post.content_preview && <p className="text-base text-gray-200 mb-3 line-clamp-3 leading-relaxed">{post.content_preview}</p>}
             {post.image_url && (
@@ -463,8 +477,10 @@ export default function Dashboard({ supabase, session }) {
   const [shareModal, setShareModal] = useState(null) // null | { url: string }
   const [sharingLoading, setSharingLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [likedPostIds, setLikedPostIds] = useState(new Set())
+  const [likedPosts, setLikedPosts] = useState([])
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates(); loadLikedPosts() }, [userId])
   useEffect(() => { setSidebarOpen(false) }, [view, selectedStreamId, selectedGroupStreamId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || ''); setShowAudienceProfile(!s?.audience_profile) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
@@ -599,6 +615,18 @@ export default function Dashboard({ supabase, session }) {
 
   async function saveApifyToken(token) { const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update({ apify_api_token: token }).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, apify_api_token: token }) }; setApifyToken(token) }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
+  async function loadLikedPosts() { const { data } = await supabase.from('liked_posts').select('post_id, post_data, created_at').eq('user_id', userId).order('created_at', { ascending: false }); if (data) { setLikedPosts(data); setLikedPostIds(new Set(data.map(p => p.post_id))) } }
+  async function toggleLike(post) {
+    const postId = post.post_id
+    if (likedPostIds.has(postId)) {
+      await supabase.from('liked_posts').delete().eq('user_id', userId).eq('post_id', postId)
+      setLikedPostIds(prev => { const next = new Set(prev); next.delete(postId); return next })
+      setLikedPosts(prev => prev.filter(p => p.post_id !== postId))
+    } else {
+      const { data } = await supabase.from('liked_posts').insert({ user_id: userId, post_id: postId, post_data: post }).select('post_id, post_data, created_at').single()
+      if (data) { setLikedPostIds(prev => new Set([...prev, postId])); setLikedPosts(prev => [data, ...prev]) }
+    }
+  }
   async function loadRecentPublicScans() { const { data } = await supabase.from('saved_scans').select('id, name, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at, scan_type').order('created_at', { ascending: false }).limit(60); setRecentPublicScans(data || []) }
   async function loadCostRates() { try { const token = (await supabase.auth.getSession()).data.session?.access_token; if (!token) return; const res = await fetch('/api/scan/cost-rates', { headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { const data = await res.json(); setCostRates(data) } } catch(e) { console.error('Failed to load cost rates:', e) } }
   async function loadPublicStreams() { const { data } = await supabase.from('streams').select('*').eq('is_public', true).neq('user_id', userId).order('created_at', { ascending: false }); setPublicStreams(data || []) }
@@ -1098,6 +1126,15 @@ export default function Dashboard({ supabase, session }) {
             </>
           )}
 
+          <div className="mt-6">
+            <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('likes'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+              className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${view === 'likes' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={view === 'likes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+              <span>Liked Posts</span>
+              {likedPosts.length > 0 && <span className="ml-auto text-xs bg-rose-500/20 text-rose-400 rounded-full px-2 py-0.5">{likedPosts.length}</span>}
+            </button>
+          </div>
+
           {publicStreams.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-2 mt-6"><span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Public Streams</span></div>
@@ -1228,7 +1265,7 @@ export default function Dashboard({ supabase, session }) {
                   {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
                 </button>
               )}
-              <RisingPostsList posts={quickRisingPosts} session={session} />
+              <RisingPostsList posts={quickRisingPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -1318,7 +1355,7 @@ export default function Dashboard({ supabase, session }) {
                         )}
                       </div>
                     )}
-                    <RisingPostsList posts={filteredSavedPosts} session={session} />
+                    <RisingPostsList posts={filteredSavedPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />
                   </>
                 )
               })()}
@@ -1768,7 +1805,7 @@ export default function Dashboard({ supabase, session }) {
                   {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
                 </button>
               )}
-              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} session={session} />}
+              {filteredPosts.length > 0 && <RisingPostsList posts={filteredPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />}
               {scanStatus === 'done' && filteredPosts.length === 0 && risingPosts.length > 0 && categoryFilterOn && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
                   <p className="text-base text-gray-500">All {risingPosts.length} rising posts were filtered out by the {CATEGORIES[streamCategory]?.label} filter.</p>
@@ -1852,7 +1889,7 @@ export default function Dashboard({ supabase, session }) {
                   {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
                 </button>
               )}
-              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} session={session} />}
+              {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center"><p className="text-base text-gray-500">No rising posts found. Try widening the time window or lowering the interaction minimum.</p></div>
               )}
@@ -1981,7 +2018,12 @@ export default function Dashboard({ supabase, session }) {
                           <span className="text-sm font-bold uppercase tracking-wide text-orange-400">{post.page_name}</span>
                           {post.age_hours != null && <span className="text-xs text-gray-500">({post.age_hours}h old)</span>}
                         </div>
-                        {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors">View Post →</a>}
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggleLike(post)} className={`transition-colors ${likedPostIds.has(post.post_id) ? 'text-rose-500' : 'text-gray-600 hover:text-rose-400'}`} title={likedPostIds.has(post.post_id) ? 'Unlike' : 'Like'}>
+                            <HeartIcon filled={likedPostIds.has(post.post_id)} />
+                          </button>
+                          {post.post_url && <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors">View Post →</a>}
+                        </div>
                       </div>
                       <p className="text-gray-200 text-base leading-relaxed mb-3">{post.content_preview}</p>
                       {post.reason && (
@@ -2009,6 +2051,29 @@ export default function Dashboard({ supabase, session }) {
         )}
         {view === 'groups' && !selectedGroupStreamId && (
           <div className="flex-1 flex items-center justify-center"><p className="text-gray-500">Select or create a group stream to start scanning.</p></div>
+        )}
+
+        {/* ─── Liked Posts ─── */}
+        {view === 'likes' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 sm:p-6 max-w-4xl">
+              <div className="flex items-center gap-3 mb-6">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                <h2 className="text-2xl font-bold text-white">Liked Posts</h2>
+                {likedPosts.length > 0 && <span className="text-xs text-gray-400 bg-gray-800 rounded-full px-2.5 py-0.5">{likedPosts.length}</span>}
+              </div>
+              {likedPosts.length === 0 ? (
+                <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mx-auto mb-4">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                  </div>
+                  <p className="text-base text-gray-500">No liked posts yet. Hit the heart icon on any post to save it here.</p>
+                </div>
+              ) : (
+                <RisingPostsList posts={likedPosts.map(lp => lp.post_data)} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
