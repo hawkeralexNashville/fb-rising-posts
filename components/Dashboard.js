@@ -1058,6 +1058,12 @@ export default function Dashboard({ supabase, session }) {
             className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'recent' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
             {Icons.clock}<span>Recent Scans</span>
           </button>
+          <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('likes'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+            className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'likes' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={view === 'likes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+            <span>Liked Posts</span>
+            {likedPosts.length > 0 && <span className="ml-auto text-xs bg-rose-500/20 text-rose-400 rounded-full px-2 py-0.5">{likedPosts.length}</span>}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -1125,15 +1131,6 @@ export default function Dashboard({ supabase, session }) {
               ))}
             </>
           )}
-
-          <div className="mt-6">
-            <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('likes'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
-              className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${view === 'likes' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill={view === 'likes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
-              <span>Liked Posts</span>
-              {likedPosts.length > 0 && <span className="ml-auto text-xs bg-rose-500/20 text-rose-400 rounded-full px-2 py-0.5">{likedPosts.length}</span>}
-            </button>
-          </div>
 
           {publicStreams.length > 0 && (
             <>
