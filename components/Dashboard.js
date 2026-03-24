@@ -396,6 +396,29 @@ function ScanSummary({ status, message, postCount, totalScraped, filteredOut, co
   )
 }
 
+// ─── Bulk Import Helper ───
+function detectPlatformAndNormalize(raw) {
+  const line = raw.trim()
+  if (!line) return null
+  let platform, url
+  if (line.includes('facebook.com') || line.includes('fb.com')) {
+    platform = 'facebook'; url = line
+  } else if (line.includes('x.com') || line.includes('twitter.com')) {
+    platform = 'x'; url = line
+  } else if (line.includes('reddit.com') || /^r\//i.test(line)) {
+    platform = 'reddit'
+    url = line.startsWith('http') ? line : PLATFORMS.reddit.urlPrefix + line.replace(/^r\//i, '')
+  } else if (line.startsWith('@')) {
+    platform = 'x'; url = PLATFORMS.x.urlPrefix + line.replace(/^@/, '')
+  } else {
+    platform = 'facebook'
+    url = line.startsWith('http') ? line : PLATFORMS.facebook.urlPrefix + line
+  }
+  url = url.replace(/\/$/, '')
+  const displayName = url.split('/').pop() || url
+  return { platform, url, displayName }
+}
+
 // ─── Main Dashboard ───
 export default function Dashboard({ supabase, session }) {
   const [view, setView] = useState('quick')
@@ -476,6 +499,11 @@ export default function Dashboard({ supabase, session }) {
   // Share state
   const [shareModal, setShareModal] = useState(null) // null | { url: string }
   const [sharingLoading, setSharingLoading] = useState(false)
+  // Bulk import state
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkImportText, setBulkImportText] = useState('')
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [bulkImportResult, setBulkImportResult] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [likedPostIds, setLikedPostIds] = useState(new Set())
   const [likedPosts, setLikedPosts] = useState([])
@@ -682,6 +710,28 @@ export default function Dashboard({ supabase, session }) {
     else if (error) { showToast('Failed to add page.', 'error') }
   }
   async function deletePage(id) { await supabase.from('monitored_pages').delete().eq('id', id); setPages(pages.filter((p) => p.id !== id)) }
+
+  async function bulkImportPages() {
+    setBulkImporting(true)
+    setBulkImportResult(null)
+    const lines = bulkImportText.split('\n').map(l => l.trim()).filter(Boolean)
+    const added = [], skipped = [], failed = []
+    const addedUrls = new Set()
+    for (const line of lines) {
+      const parsed = detectPlatformAndNormalize(line)
+      if (!parsed) { failed.push(line); continue }
+      const { platform, url, displayName } = parsed
+      const normalizedUrl = url.toLowerCase()
+      const isDuplicate = pages.some(p => p.url.replace(/\/$/, '').toLowerCase() === normalizedUrl) || addedUrls.has(normalizedUrl)
+      if (isDuplicate) { skipped.push(line); continue }
+      const { data, error } = await supabase.from('monitored_pages').insert({ user_id: userId, stream_id: selectedStreamId, url, display_name: displayName, platform }).select().single()
+      if (!error && data) { added.push(data); addedUrls.add(normalizedUrl) }
+      else { failed.push(line) }
+    }
+    if (added.length > 0) setPages(prev => [...prev, ...added])
+    setBulkImportResult({ added, skipped, failed })
+    setBulkImporting(false)
+  }
 
   async function saveScanResults(posts, stats, streamId, source) {
     if (!posts || posts.length === 0) return
@@ -1478,12 +1528,17 @@ export default function Dashboard({ supabase, session }) {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => { setShowAddPage(!showAddPage); if (!showAddPage) setShowPages(false) }}
+                    <button onClick={() => { setShowAddPage(!showAddPage); setShowBulkImport(false); setBulkImportResult(null); if (!showAddPage) setShowPages(false) }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showAddPage ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700'}`}>
                       {Icons.plus} Add Page
                     </button>
+                    <button onClick={() => { setShowBulkImport(!showBulkImport); setShowAddPage(false); setShowPages(false); setBulkImportResult(null); setBulkImportText('') }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showBulkImport ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700'}`}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="17" y1="10" x2="3" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="21" y1="14" x2="3" y2="14" /><line x1="17" y1="18" x2="3" y2="18" /></svg>
+                      Bulk Import
+                    </button>
                     {pages.length > 0 && (
-                      <button onClick={() => { setShowPages(!showPages); if (!showPages) setShowAddPage(false) }}
+                      <button onClick={() => { setShowPages(!showPages); if (!showPages) { setShowAddPage(false); setShowBulkImport(false) } }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showPages ? 'bg-gray-700 text-gray-200 border border-gray-600' : 'bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700'}`}>
                         Manage
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${showPages ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
@@ -1507,6 +1562,54 @@ export default function Dashboard({ supabase, session }) {
                       <button type="submit" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-xl text-sm font-medium text-white transition-colors">Add</button>
                     </div>
                   </form>
+                )}
+
+                {/* Bulk Import */}
+                {showBulkImport && (
+                  <div className="mt-4 pt-4 border-t border-gray-800">
+                    <p className="text-xs text-gray-500 mb-2">One URL or page name per line. Platform is auto-detected (Facebook default). Plain names are assumed Facebook.</p>
+                    {!bulkImportResult ? (
+                      <>
+                        <textarea
+                          value={bulkImportText}
+                          onChange={e => setBulkImportText(e.target.value)}
+                          placeholder={"nashvilletennesseean\nhttps://www.facebook.com/FoxNews\n@username\nr/realestate"}
+                          rows={6}
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 font-mono resize-y"
+                        />
+                        <div className="flex items-center gap-2 mt-2">
+                          <button onClick={bulkImportPages} disabled={bulkImporting || !bulkImportText.trim()}
+                            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors">
+                            {bulkImporting ? 'Importing…' : `Import ${bulkImportText.split('\n').filter(l => l.trim()).length || ''} Pages`}
+                          </button>
+                          <button onClick={() => { setShowBulkImport(false); setBulkImportText('') }} className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-400 transition-colors">Cancel</button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        {bulkImportResult.added.length > 0 && (
+                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
+                            <p className="text-sm font-semibold text-emerald-400 mb-1">✓ {bulkImportResult.added.length} added</p>
+                            <div className="space-y-0.5">{bulkImportResult.added.map((p, i) => <p key={i} className="text-xs text-emerald-300/70">{PLATFORMS[p.platform]?.icon} {p.display_name}</p>)}</div>
+                          </div>
+                        )}
+                        {bulkImportResult.skipped.length > 0 && (
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+                            <p className="text-sm font-semibold text-amber-400 mb-1">⚠ {bulkImportResult.skipped.length} skipped (already in stream)</p>
+                            <div className="space-y-0.5">{bulkImportResult.skipped.map((l, i) => <p key={i} className="text-xs text-amber-300/70 font-mono">{l}</p>)}</div>
+                          </div>
+                        )}
+                        {bulkImportResult.failed.length > 0 && (
+                          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+                            <p className="text-sm font-semibold text-red-400 mb-1">✗ {bulkImportResult.failed.length} failed</p>
+                            <div className="space-y-0.5">{bulkImportResult.failed.map((l, i) => <p key={i} className="text-xs text-red-300/70 font-mono">{l}</p>)}</div>
+                          </div>
+                        )}
+                        <button onClick={() => { setShowBulkImport(false); setBulkImportResult(null); setBulkImportText('') }}
+                          className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-300 transition-colors">Done</button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Expandable pages list */}
