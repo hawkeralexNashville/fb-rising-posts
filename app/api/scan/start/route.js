@@ -95,9 +95,18 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { pageUrls, timeWindowHours, platform = 'facebook', scanType = 'rising' } = await request.json()
+    let { pageUrls, timeWindowHours, platform = 'facebook', scanType = 'rising' } = await request.json()
 
     if (!pageUrls?.length) return NextResponse.json({ error: 'No URLs provided' }, { status: 400 })
+    pageUrls = pageUrls.map(u => {
+      if (typeof u !== 'string') return u
+      u = u.trim()
+      if (u && !u.startsWith('http')) u = 'https://' + u
+      return u
+    }).filter(u => {
+      try { new URL(u); return true } catch { return false }
+    })
+    if (!pageUrls.length) return NextResponse.json({ error: 'No valid URLs provided' }, { status: 400 })
 
     // Use the user's own Apify token
     const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
