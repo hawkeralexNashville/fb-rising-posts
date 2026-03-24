@@ -402,9 +402,9 @@ function detectPlatformAndNormalize(raw) {
   if (!line) return null
   let platform, url
   if (line.includes('facebook.com') || line.includes('fb.com')) {
-    platform = 'facebook'; url = line
+    platform = 'facebook'; url = line.startsWith('http') ? line : 'https://' + line
   } else if (line.includes('x.com') || line.includes('twitter.com')) {
-    platform = 'x'; url = line
+    platform = 'x'; url = line.startsWith('http') ? line : 'https://' + line
   } else if (line.includes('reddit.com') || /^r\//i.test(line)) {
     platform = 'reddit'
     url = line.startsWith('http') ? line : PLATFORMS.reddit.urlPrefix + line.replace(/^r\//i, '')
@@ -415,6 +415,7 @@ function detectPlatformAndNormalize(raw) {
     url = line.startsWith('http') ? line : PLATFORMS.facebook.urlPrefix + line
   }
   url = url.replace(/\/$/, '')
+  if (!url.startsWith('http')) return null
   const displayName = url.split('/').pop() || url
   return { platform, url, displayName }
 }
