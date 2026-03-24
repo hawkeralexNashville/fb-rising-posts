@@ -714,7 +714,7 @@ export default function Dashboard({ supabase, session }) {
   async function bulkImportPages() {
     setBulkImporting(true)
     setBulkImportResult(null)
-    const lines = bulkImportText.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = bulkImportText.split(/[\n,]+/).map(l => l.trim()).filter(Boolean)
     const added = [], skipped = [], failed = []
     const addedUrls = new Set()
     for (const line of lines) {
@@ -1580,7 +1580,7 @@ export default function Dashboard({ supabase, session }) {
                         <div className="flex items-center gap-2 mt-2">
                           <button onClick={bulkImportPages} disabled={bulkImporting || !bulkImportText.trim()}
                             className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium text-white transition-colors">
-                            {bulkImporting ? 'Importing…' : `Import ${bulkImportText.split('\n').filter(l => l.trim()).length || ''} Pages`}
+                            {bulkImporting ? 'Importing…' : `Import ${bulkImportText.split(/[\n,]+/).filter(l => l.trim()).length || ''} Pages`}
                           </button>
                           <button onClick={() => { setShowBulkImport(false); setBulkImportText('') }} className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-400 transition-colors">Cancel</button>
                         </div>
