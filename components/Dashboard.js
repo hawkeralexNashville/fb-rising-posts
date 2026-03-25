@@ -398,8 +398,11 @@ function ScanSummary({ status, message, postCount, totalScraped, filteredOut, co
 
 // ─── Bulk Import Helper ───
 function detectPlatformAndNormalize(raw) {
-  const line = raw.trim()
+  let line = raw.trim()
   if (!line) return null
+  // Strip markdown link syntax: [text](url) → url
+  const mdMatch = line.match(/\[([^\]]*)\]\(([^)]+)\)/)
+  if (mdMatch) line = mdMatch[2].trim()
   let platform, url
   if (line.includes('facebook.com') || line.includes('fb.com')) {
     platform = 'facebook'; url = line.startsWith('http') ? line : 'https://' + line

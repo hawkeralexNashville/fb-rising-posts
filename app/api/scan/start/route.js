@@ -102,13 +102,15 @@ export async function POST(request) {
     pageUrls = pageUrls.map(u => {
       if (typeof u !== 'string') return u
       u = u.trim()
+      // Strip markdown link syntax: [text](url) or https://[text](url)
+      const mdMatch = u.match(/\[([^\]]*)\]\(([^)]+)\)/)
+      if (mdMatch) u = mdMatch[2].trim()
       if (u && !u.startsWith('http')) u = 'https://' + u
       return u
     }).filter(u => {
       try { new URL(u); return true } catch { return false }
     })
-    console.log('[scan/start] after filter:', pageUrls.length, 'valid URLs')
-    if (!pageUrls.length) return NextResponse.json({ error: 'No valid URLs provided', debug: 'All URLs failed validation' }, { status: 400 })
+    if (!pageUrls.length) return NextResponse.json({ error: 'No valid URLs provided' }, { status: 400 })
 
     // Use the user's own Apify token
     const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
