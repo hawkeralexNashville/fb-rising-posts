@@ -98,6 +98,7 @@ export async function POST(request) {
     let { pageUrls, timeWindowHours, platform = 'facebook', scanType = 'rising' } = await request.json()
 
     if (!pageUrls?.length) return NextResponse.json({ error: 'No URLs provided' }, { status: 400 })
+    console.log('[scan/start] received', pageUrls.length, 'URLs, first 3:', JSON.stringify(pageUrls.slice(0, 3)))
     pageUrls = pageUrls.map(u => {
       if (typeof u !== 'string') return u
       u = u.trim()
@@ -106,7 +107,8 @@ export async function POST(request) {
     }).filter(u => {
       try { new URL(u); return true } catch { return false }
     })
-    if (!pageUrls.length) return NextResponse.json({ error: 'No valid URLs provided' }, { status: 400 })
+    console.log('[scan/start] after filter:', pageUrls.length, 'valid URLs')
+    if (!pageUrls.length) return NextResponse.json({ error: 'No valid URLs provided', debug: 'All URLs failed validation' }, { status: 400 })
 
     // Use the user's own Apify token
     const { data: settingsRow } = await supabase.from('user_settings').select('apify_api_token').eq('user_id', user.id).single()
