@@ -35,6 +35,9 @@ export default function TriageSetup({ supabase, session, streams }) {
   const [examplePosts, setExamplePosts] = useState([])
   const [newExampleUrl, setNewExampleUrl] = useState('')
   const [newExampleContent, setNewExampleContent] = useState('')
+  const [newExampleImage, setNewExampleImage] = useState(null) // File object
+  const [newExampleImagePreview, setNewExampleImagePreview] = useState(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [keywords, setKeywords] = useState([])
   const [newKeyword, setNewKeyword] = useState('')
   const [personaPrompt, setPersonaPrompt] = useState('')
@@ -171,11 +174,36 @@ export default function TriageSetup({ supabase, session, streams }) {
     setScanning(false)
   }
 
-  function addExamplePost() {
-    if (!newExampleUrl.trim() && !newExampleContent.trim()) return
-    setExamplePosts(prev => [...prev, { url: newExampleUrl.trim() || null, content: newExampleContent.trim() || null }])
+  function handleExampleImageChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setNewExampleImage(file)
+    setNewExampleImagePreview(URL.createObjectURL(file))
+  }
+
+  async function addExamplePost() {
+    if (!newExampleUrl.trim() && !newExampleContent.trim() && !newExampleImage) return
+    setUploadingImage(true)
+    let imageUrl = null
+    if (newExampleImage) {
+      const ext = newExampleImage.name.split('.').pop()
+      const path = `${userId}/${Date.now()}.${ext}`
+      const { data, error } = await supabase.storage.from('triage-example-images').upload(path, newExampleImage, { upsert: false })
+      if (!error && data) {
+        const { data: { publicUrl } } = supabase.storage.from('triage-example-images').getPublicUrl(data.path)
+        imageUrl = publicUrl
+      } else if (error) {
+        showToastMsg('Image upload failed: ' + error.message, 'error')
+        setUploadingImage(false)
+        return
+      }
+    }
+    setExamplePosts(prev => [...prev, { url: newExampleUrl.trim() || null, content: newExampleContent.trim() || null, image_url: imageUrl }])
     setNewExampleUrl('')
     setNewExampleContent('')
+    setNewExampleImage(null)
+    setNewExampleImagePreview(null)
+    setUploadingImage(false)
   }
 
   function removeExamplePost(i) {
@@ -348,14 +376,18 @@ export default function TriageSetup({ supabase, session, streams }) {
                 {/* ─── Example Posts Tab ─── */}
                 {tab === 1 && (
                   <div className="max-w-2xl space-y-5">
-                    <p className="text-sm text-gray-400">Add example posts that represent the type of content you want to surface. These help calibrate AI relevance scoring.</p>
+                    <p className="text-sm text-gray-400">Add example posts that represent the type of content you want to surface. GPT-4o analyzes uploaded images for visual style, text overlay, emotional hook, and caption structure to calibrate relevance scoring.</p>
 
                     <div className="space-y-3">
                       {examplePosts.map((ep, i) => (
                         <div key={i} className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3">
+                          {ep.image_url && (
+                            <img src={ep.image_url} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0 border border-gray-600" onError={e => { e.currentTarget.style.display = 'none' }} />
+                          )}
                           <div className="flex-1 min-w-0">
                             {ep.url && <p className="text-xs text-indigo-400 truncate mb-1">{ep.url}</p>}
                             {ep.content && <p className="text-sm text-gray-300 line-clamp-3">{ep.content}</p>}
+                            {ep.image_url && !ep.url && !ep.content && <p className="text-xs text-gray-500">Image only</p>}
                           </div>
                           <button onClick={() => removeExamplePost(i)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
@@ -380,8 +412,25 @@ export default function TriageSetup({ supabase, session, streams }) {
                         placeholder="Post text (optional)"
                         className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 resize-y"
                       />
-                      <button onClick={addExamplePost} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-sm text-white rounded-xl transition-colors">
-                        Add Example
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1.5">Post image (optional) — GPT-4o will analyze visual style, text overlay, and emotional hook</p>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-xl text-xs text-gray-300 transition-colors">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            {newExampleImage ? newExampleImage.name : 'Choose image…'}
+                          </div>
+                          <input type="file" accept="image/*" onChange={handleExampleImageChange} className="hidden" />
+                          {newExampleImagePreview && (
+                            <img src={newExampleImagePreview} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-600" />
+                          )}
+                          {newExampleImage && (
+                            <button type="button" onClick={() => { setNewExampleImage(null); setNewExampleImagePreview(null) }} className="text-gray-600 hover:text-red-400 transition-colors text-xs">Remove</button>
+                          )}
+                        </label>
+                      </div>
+                      <button onClick={addExamplePost} disabled={uploadingImage} className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-sm text-white rounded-xl transition-colors disabled:opacity-50">
+                        {uploadingImage && <span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />}
+                        {uploadingImage ? 'Uploading…' : 'Add Example'}
                       </button>
                     </div>
 
