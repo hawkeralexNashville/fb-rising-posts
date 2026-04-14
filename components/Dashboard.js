@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import Account from './Account'
 import Admin from './Admin'
 import ApifySetup from './ApifySetup'
+import TriageSetup from './TriageSetup'
+import TriageDashboard from './TriageDashboard'
 
 // ─── Platform Config ───
 const PLATFORMS = {
@@ -460,6 +462,7 @@ export default function Dashboard({ supabase, session }) {
   const [publicPages, setPublicPages] = useState([])
   const [showPublicPages, setShowPublicPages] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
   const [savedScanAudienceProfile, setSavedScanAudienceProfile] = useState('')
   const [showSavedScanAudienceProfile, setShowSavedScanAudienceProfile] = useState(false)
   const [pendingRerun, setPendingRerun] = useState(null)
@@ -512,7 +515,7 @@ export default function Dashboard({ supabase, session }) {
   const [likedPostIds, setLikedPostIds] = useState(new Set())
   const [likedPosts, setLikedPosts] = useState([])
 
-  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates(); loadLikedPosts() }, [userId])
+  useEffect(() => { if (!userId) return; loadStreams(); loadSettings(); loadSavedScans(); loadPublicStreams(); loadGroupStreams(); loadRecentPublicScans(); loadCostRates(); loadLikedPosts(); loadUserRole() }, [userId])
   useEffect(() => { setSidebarOpen(false) }, [view, selectedStreamId, selectedGroupStreamId])
   useEffect(() => { if (!selectedStreamId) { setPages([]); setRisingPosts([]); setNotifSettings(null); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); setShowAudienceProfile(false); return }; loadPages(selectedStreamId); loadNotifSettings(selectedStreamId); setShowPages(false); setShowAddPage(false); setShowNotifSettings(false); setRelevanceStats(null); setRelevanceFilter('all'); if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setRisingPosts([]); setScanStatus('idle'); setScanMessage(''); setScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }); const s = streams.find(st => st.id === selectedStreamId); setCategoryFilterOn(s?.category && s.category !== 'none' ? true : false); setEditingAudienceProfile(s?.audience_profile || ''); setShowAudienceProfile(!s?.audience_profile) }, [selectedStreamId])
   useEffect(() => { if (!selectedGroupStreamId) { setGroupPages([]); setGroupPosts([]); return }; loadGroupPages(selectedGroupStreamId); setShowGroupPages(false); setShowAddGroupPage(false); setGroupPosts([]); setGroupScanStatus('idle'); setGroupScanMessage(''); setGroupScanStats({ totalScraped: 0, filteredOut: 0, costUsd: null }) }, [selectedGroupStreamId])
@@ -648,6 +651,7 @@ export default function Dashboard({ supabase, session }) {
   async function saveApifyToken(token) { const { data: existing } = await supabase.from('user_settings').select('id').eq('user_id', userId).single(); if (existing) { await supabase.from('user_settings').update({ apify_api_token: token }).eq('user_id', userId) } else { await supabase.from('user_settings').insert({ user_id: userId, apify_api_token: token }) }; setApifyToken(token) }
   async function loadSavedScans() { const { data } = await supabase.from('saved_scans').select('id, name, stream_id, time_window, min_interactions, max_interactions, total_scraped, rising_count, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50); setSavedScans(data || []) }
   async function loadLikedPosts() { const { data } = await supabase.from('liked_posts').select('post_id, post_data, created_at').eq('user_id', userId).order('created_at', { ascending: false }); if (data) { setLikedPosts(data); setLikedPostIds(new Set(data.map(p => p.post_id))) } }
+  async function loadUserRole() { const { data } = await supabase.from('user_roles').select('role').eq('user_id', userId).single(); if (data?.role === 'owner') setIsOwner(true) }
   async function toggleLike(post) {
     const postId = post.post_id
     if (likedPostIds.has(postId)) {
@@ -1118,6 +1122,20 @@ export default function Dashboard({ supabase, session }) {
             <span>Liked Posts</span>
             {likedPosts.length > 0 && <span className="ml-auto text-xs bg-rose-500/20 text-rose-400 rounded-full px-2 py-0.5">{likedPosts.length}</span>}
           </button>
+          {isOwner && (
+            <>
+              <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('triage'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'triage' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></svg>
+                <span>Content Triage</span>
+              </button>
+              <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('triage-setup'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
+                className={`flex items-center gap-2 w-full pl-9 pr-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'triage-setup' ? 'text-indigo-400' : 'text-gray-600 hover:text-gray-400'}`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+                Setup
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -1239,6 +1257,8 @@ export default function Dashboard({ supabase, session }) {
         </div>
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} groupMinComments={groupMinComments} setGroupMinComments={setGroupMinComments} groupMinReactions={groupMinReactions} setGroupMinReactions={setGroupMinReactions} streams={streams} savedScans={savedScans} apifyToken={apifyToken} saveApifyToken={saveApifyToken} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
+        {view === 'triage' && isOwner && <TriageDashboard supabase={supabase} session={session} onOpenSetup={() => setView('triage-setup')} />}
+        {view === 'triage-setup' && isOwner && <TriageSetup supabase={supabase} session={session} streams={streams} />}
 
         {/* ─── Recent Scans Grid ─── */}
         {view === 'recent' && (
