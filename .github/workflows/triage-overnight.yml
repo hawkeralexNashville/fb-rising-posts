@@ -1,0 +1,24 @@
+name: Triage Overnight Scan
+
+on:
+  schedule:
+    # Every 30 min from 3 AM–11 AM UTC (9 PM–5 AM CT). Script checks DB for configured times.
+    - cron: '*/30 3-11 * * *'
+  workflow_dispatch:
+
+jobs:
+  triage-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run triage overnight scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/triage-overnight.mjs
