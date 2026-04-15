@@ -141,27 +141,17 @@ function ScanGroup({ group, onArchive, onGenerate, generating, localGenerated })
 }
 
 function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generating, localGenerated, isArchived }) {
-  const [expanded, setExpanded] = useState(false)
-  const [pasteContent, setPasteContent] = useState('')
-
   const headline = localGenerated?.headline ?? card.generated_headline
   const caption = localGenerated?.caption ?? card.generated_caption
   const hasGenerated = headline || caption
 
-  useEffect(() => {
-    if (localGenerated?.headline || localGenerated?.caption) setExpanded(true)
-  }, [localGenerated?.headline, localGenerated?.caption])
-
   return (
-    <div className={`bg-gray-900 rounded-2xl border transition-all ${card.is_top_five && !isArchived ? 'border-indigo-500/50 ring-1 ring-indigo-500/20 shadow-lg shadow-indigo-500/5' : 'border-gray-700 hover:border-gray-600'}`}>
+    <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all">
       {/* Card header */}
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <SourceBadge type={card.source_type} />
-            {card.is_top_five && !isArchived && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-semibold">⭐ Top 5</span>
-            )}
             {card.title && <span className="text-sm font-semibold text-orange-400 truncate max-w-[200px]">{card.title}</span>}
             <span className="text-xs text-gray-500">{timeAgo(card.created_at)}</span>
           </div>
@@ -175,23 +165,14 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
           </div>
         </div>
 
-        {card.ai_relevance_reason && (
-          <p className="text-xs text-gray-500 mb-2 italic">{card.ai_relevance_reason}</p>
-        )}
-
         {card.content && (
           <p className="text-sm text-gray-200 leading-relaxed line-clamp-3">{card.content}</p>
         )}
 
         {card.image_url && (
           <div className="mt-3 rounded-xl overflow-hidden bg-gray-800 border border-gray-700 max-h-40">
-            <img
-              src={card.image_url}
-              alt=""
-              className="w-full max-h-40 object-cover"
-              loading="lazy"
-              onError={e => { e.currentTarget.parentElement.style.display = 'none' }}
-            />
+            <img src={card.image_url} alt="" className="w-full max-h-40 object-cover" loading="lazy"
+              onError={e => { e.currentTarget.parentElement.style.display = 'none' }} />
           </div>
         )}
 
@@ -204,8 +185,8 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
         )}
       </div>
 
-      {/* Generated content area */}
-      {(hasGenerated || expanded) && (headline || caption) && (
+      {/* Generated content */}
+      {(headline || caption) && (
         <div className="mx-4 mb-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl space-y-3">
           {headline && (
             <div>
@@ -225,63 +206,120 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
               </div>
             </div>
           )}
-          {headline && caption && (
-            <CopyButton text={`${headline}\n\n${caption}`} />
-          )}
         </div>
       )}
 
-      {/* Generate area — only on active cards */}
+      {/* Actions */}
       {!isArchived && (
-        <div className="mx-4 mb-3 space-y-2">
-          <textarea
-            value={pasteContent}
-            onChange={e => setPasteContent(e.target.value)}
-            rows={3}
-            placeholder="Paste article or post content here…"
-            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-400 resize-y"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onGenerate(card.id, pasteContent)}
-              disabled={!!generating}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-            >
-              {generating
-                ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
-                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate Headline & Caption' : 'Generate Headline & Caption'}</>
-              }
-            </button>
-            <button
-              onClick={() => onArchive(card.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 border border-gray-700 rounded-lg text-xs font-medium transition-colors ml-auto"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
-              Archive
-            </button>
-          </div>
+        <div className="px-4 pb-4 flex items-center gap-2">
+          <button onClick={() => onGenerate(card.id)} disabled={!!generating}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+            {generating
+              ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
+              : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate' : 'Generate Headline & Caption'}</>
+            }
+          </button>
+          <button onClick={() => onArchive(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 border border-gray-700 rounded-lg text-xs font-medium transition-colors ml-auto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
+            Archive
+          </button>
         </div>
       )}
 
-      {/* Actions — archived cards only */}
       {isArchived && (
         <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => onRestore(card.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition-colors"
-          >
+          <button onClick={() => onRestore(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition-colors">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.08" /></svg>
             Restore
           </button>
-          <button
-            onClick={() => onDelete(card.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors ml-auto"
-          >
+          <button onClick={() => onDelete(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors ml-auto">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
             Delete
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerated }) {
+  const headline = localGenerated?.headline ?? card.generated_headline
+  const caption = localGenerated?.caption ?? card.generated_caption
+  const hasGenerated = headline || caption
+
+  return (
+    <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all overflow-hidden">
+      <div className="flex">
+        {card.image_url && (
+          <div className="shrink-0 w-44 bg-gray-800 self-stretch">
+            <img src={card.image_url} alt="" className="w-44 h-full object-cover"
+              onError={e => { e.currentTarget.parentElement.style.display = 'none' }} loading="lazy" />
+          </div>
+        )}
+        <div className="flex-1 p-5 flex flex-col gap-3 min-w-0">
+          {/* Header */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SourceBadge type={card.source_type} />
+            {card.title && <span className="text-sm text-gray-400 truncate max-w-[200px]">{card.title}</span>}
+            {card.url && (
+              <a href={card.url} target="_blank" rel="noopener noreferrer"
+                className="ml-auto shrink-0 text-gray-600 hover:text-orange-400 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            )}
+          </div>
+
+          {/* Generated content */}
+          {hasGenerated ? (
+            <div className="space-y-3">
+              {headline && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Headline</p>
+                  <div className="flex items-start gap-2">
+                    <p className="flex-1 text-sm font-semibold text-white leading-relaxed">{headline}</p>
+                    <CopyButton text={headline} />
+                  </div>
+                </div>
+              )}
+              {caption && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Caption</p>
+                  <div className="flex items-start gap-2">
+                    <p className="flex-1 text-sm text-gray-200 leading-relaxed">{caption}</p>
+                    <CopyButton text={caption} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 py-2">No content generated yet. Click Generate to create headline &amp; caption.</p>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 mt-auto pt-3 border-t border-gray-800">
+            <button onClick={() => onGenerate(card.id)} disabled={!!generating}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+              {generating
+                ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
+                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate' : 'Generate'}</>
+              }
+            </button>
+            <button onClick={() => onMarkPosted(card.id)}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors ml-auto">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Mark as Posted
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -440,14 +478,25 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
     showToast('Card deleted')
   }
 
-  async function generateContent(cardId, sourceContent) {
+  async function markPosted(cardId) {
+    const token = await getToken()
+    await fetch('/api/triage/cards', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: cardId, is_posted: true, is_archived: true }),
+    })
+    setCards(prev => prev.filter(c => c.id !== cardId))
+    showToast('Marked as posted')
+  }
+
+  async function generateContent(cardId) {
     setGenerating(prev => ({ ...prev, [cardId]: true }))
     const token = await getToken()
     try {
       const res = await fetch('/api/triage/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cardId, type: 'both', sourceContent }),
+        body: JSON.stringify({ cardId, type: 'both' }),
       })
       const data = await res.json()
       if (res.ok && (data.headline || data.caption)) {
@@ -551,6 +600,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                 <div className="flex gap-0.5">
                   {[
                     { key: 'cards', label: `Cards${cards.length ? ` (${cards.length}${cardsHasMore ? '+' : ''})` : ''}` },
+                    { key: 'executor', label: 'Executor' },
                     { key: 'archive', label: 'Archive' },
                     { key: 'log', label: 'Scan Log' },
                   ].map(t => (
@@ -631,6 +681,43 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                       {cardsLoading ? 'Loading…' : 'Load more'}
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* ─── Executor Tab ─── */}
+              {tab === 'executor' && (
+                <div className="p-5 max-w-3xl">
+                  <div className="mb-5">
+                    <p className="text-xs text-gray-500">Top 5 unposted cards per scan — ready to create posts from. Click Generate, copy the content, then mark as posted.</p>
+                  </div>
+
+                  {cards.filter(c => !c.is_posted).length === 0 && (
+                    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
+                      <p className="text-gray-500 text-sm">No cards yet. Run a scan first.</p>
+                    </div>
+                  )}
+
+                  {groupCards(cards.filter(c => !c.is_posted)).map(group => (
+                    <div key={group.key} className="mb-10">
+                      <div className="flex items-center gap-3 mb-4">
+                        <p className="text-sm font-bold text-white shrink-0">{formatScanDate(group.timestamp)}</p>
+                        <SourceBadge type={group.source} />
+                        <div className="flex-1 h-px bg-gray-800" />
+                      </div>
+                      <div className="space-y-3">
+                        {group.top.map(card => (
+                          <ExecutorCard
+                            key={card.id}
+                            card={card}
+                            onMarkPosted={markPosted}
+                            onGenerate={generateContent}
+                            generating={generating[card.id]}
+                            localGenerated={localGenerated[card.id]}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
