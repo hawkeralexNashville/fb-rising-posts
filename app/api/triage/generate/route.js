@@ -74,8 +74,11 @@ export async function POST(request) {
   const { data: card } = await db.from('triage_cards').select('*').eq('id', cardId).single()
   if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 })
 
-  const { data: page } = await db.from('triage_pages').select('*').eq('id', card.triage_page_id).eq('user_id', user.id).single()
-  if (!page) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const { data: page } = await db.from('triage_pages').select('*').eq('id', card.triage_page_id).single()
+  if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 })
+  const isOwner = page.user_id === user.id
+  const isCollab = page.collaborator_email?.toLowerCase() === user.email?.toLowerCase()
+  if (!isOwner && !isCollab) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   // Fetch example posts (with images) for visual style context
   const { data: examplePosts } = await db.from('triage_example_posts').select('image_url, content, url').eq('triage_page_id', page.id).limit(4)
