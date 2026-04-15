@@ -41,23 +41,36 @@ export async function POST(request) {
   const { data: page } = await db.from('triage_pages').select('*').eq('id', card.triage_page_id).eq('user_id', user.id).single()
   if (!page) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
+  // Fetch example posts (with images) for visual style context
+  const { data: examplePosts } = await db.from('triage_example_posts').select('image_url, content, url').eq('triage_page_id', page.id).limit(4)
+  const exampleImages = (examplePosts || []).map(e => e.image_url).filter(Boolean)
+
   const contentBlock = [
     card.title ? `Source: ${card.title}` : null,
     card.url ? `URL: ${card.url}` : null,
     card.content ? `Content: ${card.content.slice(0, 800)}` : null,
   ].filter(Boolean).join('\n')
 
-  let systemPrompt, userPrompt
+  let systemPrompt, textPrompt
 
   if (type === 'headline') {
     systemPrompt = page.headline_prompt ||
       'You are a social media content writer for a Facebook page. Write a single engaging Facebook post headline for the content below. Make it attention-grabbing and conversational. Return ONLY the headline — no quotes, no hashtags, no explanation.'
-    userPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT:\n${contentBlock}`
+    textPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT TO WRITE HEADLINE FOR:\n${contentBlock}`
   } else {
     systemPrompt = page.caption_prompt ||
       'You are a social media content writer for a Facebook page. Write an engaging Facebook post caption (2–4 sentences). Be conversational, relatable, and end with a question or call to action that encourages comments. Return ONLY the caption — no quotes, no hashtags, no explanation.'
-    userPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT:\n${contentBlock}`
+    textPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT TO WRITE CAPTION FOR:\n${contentBlock}`
   }
+
+  // Build multimodal user content — include example post images for style reference
+  const userContent = exampleImages.length > 0
+    ? [
+        { type: 'text', text: `The following images are example posts from this page — use them as style and tone reference:\n` },
+        ...exampleImages.map(url => ({ type: 'image_url', image_url: { url, detail: 'low' } })),
+        { type: 'text', text: '\n' + textPrompt },
+      ]
+    : textPrompt
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -67,10 +80,10 @@ export async function POST(request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: userContent },
         ],
         max_tokens: 400,
         temperature: 0.75,

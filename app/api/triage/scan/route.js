@@ -77,30 +77,56 @@ function normalizePost(raw) {
   }
 }
 
-async function scoreRelevance(posts, persona, customPrompt) {
+async function scoreRelevance(posts, persona, customPrompt, examplePosts = []) {
   if (!process.env.OPENAI_API_KEY || !persona || !posts.length) return posts
-  const summaries = posts.slice(0, 30).map((p, i) => `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 200)}`).join('\n')
-  const prompt = `${customPrompt || 'You are a relevance filter for a Facebook page.'}
 
-AUDIENCE PERSONA:
-${persona}
+  // ── Pass 1: gpt-4o-mini cheap bulk filter ──
+  let candidates = posts
+  try {
+    const summaries = posts.slice(0, 40).map((p, i) =>
+      `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 150)}`
+    ).join('\n')
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: `Filter these posts for basic topical relevance. Score each 1-10 (1=off-topic, 10=clearly relevant). Be lenient. Respond ONLY with valid JSON: [{"i":index,"s":score}]\n\nPAGE TOPIC:\n${persona.slice(0, 300)}\n\nPOSTS:\n${summaries}` }],
+        max_tokens: 600, temperature: 0.1,
+      }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      const scores = JSON.parse((data.choices?.[0]?.message?.content || '[]').replace(/```json\s*/g, '').replace(/```/g, '').trim())
+      const passing = new Set(scores.filter(x => x.s >= 4).map(x => x.i))
+      if (passing.size > 0) candidates = posts.filter((_, i) => passing.has(i))
+    }
+  } catch {}
 
-Score each post 1-10 for relevance. Respond ONLY with valid JSON:
-[{"i":index,"s":score,"r":"one line reason"}]
-
-POSTS:
-${summaries}`
+  // ── Pass 2: gpt-4o deep persona scoring with example image context ──
+  const exampleImages = (examplePosts || []).map(e => e.image_url).filter(Boolean).slice(0, 4)
+  const summaries2 = candidates.slice(0, 20).map((p, i) =>
+    `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 200)}`
+  ).join('\n')
+  const textBlock = `${customPrompt || 'You are a relevance filter for a Facebook page.'}\n\nAUDIENCE PERSONA:\n${persona}\n\nScore each post 1-10 for relevance to this page's specific audience. Respond ONLY with valid JSON:\n[{"i":index,"s":score,"r":"one line reason"}]\n\nPOSTS:\n${summaries2}`
+  const userContent = exampleImages.length > 0
+    ? [
+        { type: 'text', text: 'These images are example posts showing this page\'s content style:\n' },
+        ...exampleImages.map(url => ({ type: 'image_url', image_url: { url, detail: 'low' } })),
+        { type: 'text', text: '\n' + textBlock },
+      ]
+    : textBlock
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 2000, temperature: 0.2 }),
+      body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: userContent }], max_tokens: 1500, temperature: 0.2 }),
     })
-    if (!res.ok) return posts
+    if (!res.ok) return candidates
     const data = await res.json()
     const scores = JSON.parse((data.choices?.[0]?.message?.content || '[]').replace(/```json\s*/g, '').replace(/```/g, '').trim())
-    return posts.map((p, i) => { const s = scores.find(x => x.i === i); return { ...p, ai_relevance_score: s?.s ?? null, ai_relevance_reason: s?.r ?? null } })
-  } catch { return posts }
+    return candidates.map((p, i) => { const s = scores.find(x => x.i === i); return { ...p, ai_relevance_score: s?.s ?? null, ai_relevance_reason: s?.r ?? null } })
+  } catch { return candidates }
 }
 
 async function updateTopFive(db, pageId) {
@@ -134,8 +160,11 @@ export async function POST(request) {
   const apifyToken = settings?.apify_api_token
   if (!apifyToken) return NextResponse.json({ error: 'No Apify API token in your settings' }, { status: 400 })
 
-  // Get stream page URLs
-  const { data: monitoredPages } = await db.from('monitored_pages').select('url,platform').eq('stream_id', page.stream_id)
+  // Get stream page URLs and example posts (for AI context)
+  const [{ data: monitoredPages }, { data: examplePosts }] = await Promise.all([
+    db.from('monitored_pages').select('url,platform').eq('stream_id', page.stream_id),
+    db.from('triage_example_posts').select('image_url,content,url').eq('triage_page_id', triagePageId).limit(4),
+  ])
   const pageUrls = (monitoredPages || []).filter(p => !p.platform || p.platform === 'facebook').map(p => p.url).filter(u => u?.startsWith('http'))
   if (!pageUrls.length) return NextResponse.json({ error: 'No valid Facebook pages in this stream' }, { status: 400 })
 
@@ -153,7 +182,7 @@ export async function POST(request) {
 
     let added = 0
     if (deduped.length) {
-      const scored = await scoreRelevance(deduped, page.persona, page.relevance_prompt)
+      const scored = await scoreRelevance(deduped, page.persona, page.relevance_prompt, examplePosts || [])
       const toInsert = scored.map(p => ({
         triage_page_id: triagePageId,
         source_type: 'facebook',

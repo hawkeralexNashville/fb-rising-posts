@@ -105,45 +105,71 @@ function normalizePost(raw) {
   }
 }
 
-// ─── AI relevance scoring ───
-async function scoreRelevance(posts, persona, customPrompt) {
+// ─── AI relevance scoring (two-pass) ───
+async function scoreRelevance(posts, persona, customPrompt, examplePosts = []) {
   if (!OPENAI_API_KEY || !persona || posts.length === 0) return posts
-  const summaries = posts.slice(0, 30).map((p, i) =>
-    `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 200)}`
-  ).join('\n')
-  const prompt = `${customPrompt || 'You are a relevance filter for a Facebook page.'}
 
-AUDIENCE PERSONA:
-${persona}
-
-Score each post 1-10 for relevance to this page's audience. Respond ONLY with valid JSON:
-[{"i":index,"s":score,"r":"one line reason"}]
-
-POSTS:
-${summaries}`
-
+  // ── Pass 1: gpt-4o-mini cheap bulk filter ──
+  let candidates = posts
   try {
+    const summaries = posts.slice(0, 40).map((p, i) =>
+      `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 150)}`
+    ).join('\n')
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000,
-        temperature: 0.2,
+        messages: [{ role: 'user', content: `Filter these posts for basic topical relevance. Score each 1-10 (1=off-topic, 10=clearly relevant). Be lenient. Respond ONLY with valid JSON: [{"i":index,"s":score}]\n\nPAGE TOPIC:\n${persona.slice(0, 300)}\n\nPOSTS:\n${summaries}` }],
+        max_tokens: 600, temperature: 0.1,
       }),
     })
-    if (!res.ok) return posts
+    if (res.ok) {
+      const data = await res.json()
+      const scores = JSON.parse((data.choices?.[0]?.message?.content || '[]').replace(/```json\s*/g, '').replace(/```/g, '').trim())
+      const passing = new Set(scores.filter(x => x.s >= 4).map(x => x.i))
+      if (passing.size > 0) {
+        candidates = posts.filter((_, i) => passing.has(i))
+        console.log(`[triage] Pass 1 filter: ${posts.length} → ${candidates.length} posts`)
+      }
+    }
+  } catch (e) {
+    console.error('[triage] Pass 1 filter failed, using all posts:', e.message)
+  }
+
+  // ── Pass 2: gpt-4o deep persona scoring with example image context ──
+  const exampleImages = (examplePosts || []).map(e => e.image_url).filter(Boolean).slice(0, 4)
+  const summaries2 = candidates.slice(0, 20).map((p, i) =>
+    `[${i}] ${p.title ? p.title + ': ' : ''}${p.content.slice(0, 200)}`
+  ).join('\n')
+  const textBlock = `${customPrompt || 'You are a relevance filter for a Facebook page.'}\n\nAUDIENCE PERSONA:\n${persona}\n\nScore each post 1-10 for relevance to this page's specific audience. Respond ONLY with valid JSON:\n[{"i":index,"s":score,"r":"one line reason"}]\n\nPOSTS:\n${summaries2}`
+  const userContent = exampleImages.length > 0
+    ? [
+        { type: 'text', text: 'These images are example posts showing this page\'s content style:\n' },
+        ...exampleImages.map(url => ({ type: 'image_url', image_url: { url, detail: 'low' } })),
+        { type: 'text', text: '\n' + textBlock },
+      ]
+    : textBlock
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: userContent }],
+        max_tokens: 1500, temperature: 0.2,
+      }),
+    })
+    if (!res.ok) return candidates
     const data = await res.json()
-    const raw = data.choices?.[0]?.message?.content || '[]'
-    const scores = JSON.parse(raw.replace(/```json\s*/g, '').replace(/```/g, '').trim())
-    return posts.map((p, i) => {
+    const scores = JSON.parse((data.choices?.[0]?.message?.content || '[]').replace(/```json\s*/g, '').replace(/```/g, '').trim())
+    return candidates.map((p, i) => {
       const s = scores.find(x => x.i === i)
       return { ...p, ai_relevance_score: s?.s ?? null, ai_relevance_reason: s?.r ?? null }
     })
   } catch (e) {
-    console.error('[triage] AI scoring failed:', e.message)
-    return posts
+    console.error('[triage] Pass 2 scoring failed:', e.message)
+    return candidates
   }
 }
 
@@ -205,6 +231,12 @@ export async function runTriageScan(page, apifyToken) {
     return { added: 0, total: 0 }
   }
 
+  // Fetch example posts for AI image context (in parallel with Apify start)
+  const [examplePostsResult] = await Promise.all([
+    sb('triage_example_posts', 'GET', null, `?triage_page_id=eq.${page.id}&select=image_url,content,url&limit=4`),
+  ])
+  const examplePosts = examplePostsResult || []
+
   console.log(`[triage] ${page.name}: ${pageUrls.length} pages → starting Apify`)
   const runId = await startApifyScan(pageUrls, apifyToken)
   await pollApifyRun(runId, apifyToken)
@@ -227,8 +259,8 @@ export async function runTriageScan(page, apifyToken) {
     return { added: 0, total: rawResults.length }
   }
 
-  // AI relevance scoring
-  const scored = await scoreRelevance(deduped, page.persona, page.relevance_prompt)
+  // AI relevance scoring (two-pass: gpt-4o-mini filter → gpt-4o deep score)
+  const scored = await scoreRelevance(deduped, page.persona, page.relevance_prompt, examplePosts)
 
   // Insert cards
   const toInsert = scored.map(p => ({
