@@ -45,6 +45,7 @@ export default function TriageSetup({ supabase, session, streams }) {
   const [relevancePrompt, setRelevancePrompt] = useState('')
   const [scanTimes, setScanTimes] = useState(DEFAULT_SCAN_TIMES)
   const [scanWindowHours, setScanWindowHours] = useState(6)
+  const [scanEnabled, setScanEnabled] = useState(true)
 
   const userId = session?.user?.id
 
@@ -77,6 +78,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     setRelevancePrompt(page.relevance_prompt || '')
     setScanTimes(page.scan_times || DEFAULT_SCAN_TIMES)
     setScanWindowHours(page.scan_window_hours || 6)
+    setScanEnabled(page.scan_enabled !== false)
     setScanResult(null)
   }
 
@@ -135,7 +137,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     } else if (tab === 3) {
       body = { ...body, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt }
     } else if (tab === 4) {
-      body = { ...body, scan_times: scanTimes, scan_window_hours: scanWindowHours }
+      body = { ...body, scan_times: scanTimes, scan_window_hours: scanWindowHours, scan_enabled: scanEnabled }
     }
 
     const res = await fetch('/api/triage/pages', {
@@ -145,7 +147,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     })
     const data = await res.json()
     if (res.ok) {
-      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes, scan_window_hours: scanWindowHours } : p))
+      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes, scan_window_hours: scanWindowHours, scan_enabled: scanEnabled } : p))
       showToastMsg('Saved!')
     } else {
       showToastMsg(data.error || 'Failed to save', 'error')
@@ -533,19 +535,38 @@ export default function TriageSetup({ supabase, session, streams }) {
                   <div className="max-w-xl space-y-6">
 
                     {/* Status indicator */}
-                    {streamId ? (
+                    {!streamId ? (
+                      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                        <p className="text-sm text-amber-300 font-medium">No stream linked</p>
+                        <p className="text-xs text-amber-600 ml-1">— schedule won't run until a stream is set in the Persona tab</p>
+                      </div>
+                    ) : scanEnabled ? (
                       <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
                         <p className="text-sm text-emerald-300 font-medium">Schedule active</p>
                         <p className="text-xs text-emerald-600 ml-auto">Runs at {selectedPage?.scan_times?.join(', ') || scanTimes.join(', ')} CT</p>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                        <p className="text-sm text-amber-300 font-medium">No stream linked</p>
-                        <p className="text-xs text-amber-600 ml-1">— schedule won't run until a stream is set in the Persona tab</p>
+                      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700">
+                        <span className="w-2 h-2 rounded-full bg-gray-600 shrink-0" />
+                        <p className="text-sm text-gray-400 font-medium">Schedule paused</p>
+                        <p className="text-xs text-gray-600 ml-auto">Times saved but won't run</p>
                       </div>
                     )}
+
+                    {/* Enable / disable toggle */}
+                    <button
+                      onClick={() => setScanEnabled(prev => !prev)}
+                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl border transition-colors ${scanEnabled ? 'bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20' : 'bg-gray-800 border-gray-700 hover:bg-gray-750'}`}
+                    >
+                      <div className={`relative w-10 h-5.5 rounded-full transition-colors shrink-0 ${scanEnabled ? 'bg-indigo-500' : 'bg-gray-600'}`} style={{ height: '22px', width: '40px' }}>
+                        <span className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 bg-white rounded-full shadow transition-transform ${scanEnabled ? 'translate-x-[18px]' : 'translate-x-0'}`} style={{ width: '18px', height: '18px', transform: scanEnabled ? 'translateX(18px)' : 'translateX(0)' }} />
+                      </div>
+                      <span className={`text-sm font-medium ${scanEnabled ? 'text-indigo-300' : 'text-gray-400'}`}>
+                        {scanEnabled ? 'Scheduled scans enabled' : 'Scheduled scans disabled'}
+                      </span>
+                    </button>
 
                     <div>
                       <p className="text-sm text-gray-300 font-medium mb-1">Overnight Scan Schedule</p>

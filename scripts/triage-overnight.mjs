@@ -298,7 +298,7 @@ async function main() {
   const pages = await sb('triage_pages', 'GET', null, '?select=*')
   if (!pages?.length) { console.log('[triage-overnight] No pages configured'); return }
 
-  const due = pages.filter(p => p.stream_id && p.scan_times?.some(t => timeMatchesCT(t)))
+  const due = pages.filter(p => p.scan_enabled !== false && p.stream_id && p.scan_times?.some(t => timeMatchesCT(t)))
   if (!due.length) { console.log('[triage-overnight] No pages due at this time'); return }
   console.log(`[triage-overnight] ${due.length} page(s) due`)
 

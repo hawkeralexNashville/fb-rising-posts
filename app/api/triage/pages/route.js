@@ -60,6 +60,7 @@ export async function POST(request) {
     relevance_prompt: body.relevance_prompt || '',
     scan_times: body.scan_times || ['22:00', '01:00', '04:00'],
     scan_window_hours: body.scan_window_hours || 6,
+    scan_enabled: body.scan_enabled !== false,
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ...data, keywords: [], example_posts: [] })
