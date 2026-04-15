@@ -160,7 +160,7 @@ async function updateTopFive(pageId) {
 async function main() {
   console.log(`[triage-rss] ${new Date().toISOString()}`)
 
-  const pages = await sb('triage_pages', 'GET', null, '?select=id,name,user_id,persona,relevance_prompt')
+  const pages = await sb('triage_pages', 'GET', null, '?select=id,name,user_id,persona,relevance_prompt,scan_window_hours')
   if (!pages?.length) { console.log('[triage-rss] No pages configured'); return }
 
   for (const page of pages) {
@@ -180,10 +180,16 @@ async function main() {
     for (const { keyword } of keywords) {
       try {
         const items = await fetchRss(keyword)
-        const fresh = items.filter(item => item.url && !existingUrls.has(item.url.toLowerCase()))
+        const maxAgeHours = page.scan_window_hours || 24
+        const cutoff = Date.now() - maxAgeHours * 3600000
+        const fresh = items.filter(item =>
+          item.url &&
+          !existingUrls.has(item.url.toLowerCase()) &&
+          new Date(item.published_at).getTime() >= cutoff
+        )
         fresh.forEach(item => existingUrls.add(item.url.toLowerCase()))
         allNewItems.push(...fresh)
-        console.log(`[triage-rss] ${page.name} / "${keyword}": ${fresh.length} new of ${items.length}`)
+        console.log(`[triage-rss] ${page.name} / "${keyword}": ${fresh.length} new of ${items.length} (last ${maxAgeHours}h)`)
       } catch (err) {
         console.error(`[triage-rss] ${page.name} / "${keyword}": ${err.message}`)
         await logScan(page.id, page.name, 'failed', `Keyword "${keyword}": ${err.message}`)
