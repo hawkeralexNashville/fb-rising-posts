@@ -246,79 +246,104 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
 }
 
 function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerated }) {
+  const [pasteContent, setPasteContent] = useState('')
   const headline = localGenerated?.headline ?? card.generated_headline
   const caption = localGenerated?.caption ?? card.generated_caption
   const hasGenerated = headline || caption
 
   return (
-    <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all overflow-hidden">
-      <div className="flex">
-        {card.image_url && (
-          <div className="shrink-0 w-44 bg-gray-800 self-stretch">
-            <img src={card.image_url} alt="" className="w-44 h-full object-cover"
-              onError={e => { e.currentTarget.parentElement.style.display = 'none' }} loading="lazy" />
-          </div>
+    <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 pt-4 pb-3 flex-wrap">
+        <SourceBadge type={card.source_type} />
+        {card.title && <span className="text-sm font-semibold text-orange-400 truncate max-w-[220px]">{card.title}</span>}
+        <span className="text-xs text-gray-500">{timeAgo(card.created_at)}</span>
+        {card.url && (
+          <a href={card.url} target="_blank" rel="noopener noreferrer"
+            className="ml-auto shrink-0 text-gray-600 hover:text-orange-400 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
         )}
-        <div className="flex-1 p-5 flex flex-col gap-3 min-w-0">
-          {/* Header */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <SourceBadge type={card.source_type} />
-            {card.title && <span className="text-sm text-gray-400 truncate max-w-[200px]">{card.title}</span>}
-            {card.url && (
-              <a href={card.url} target="_blank" rel="noopener noreferrer"
-                className="ml-auto shrink-0 text-gray-600 hover:text-orange-400 transition-colors">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-              </a>
-            )}
-          </div>
+      </div>
 
-          {/* Generated content */}
-          {hasGenerated ? (
-            <div className="space-y-3">
-              {headline && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Headline</p>
-                  <div className="flex items-start gap-2">
-                    <p className="flex-1 text-sm font-semibold text-white leading-relaxed">{headline}</p>
-                    <CopyButton text={headline} />
-                  </div>
-                </div>
-              )}
-              {caption && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Caption</p>
-                  <div className="flex items-start gap-2">
-                    <p className="flex-1 text-sm text-gray-200 leading-relaxed">{caption}</p>
-                    <CopyButton text={caption} />
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 py-2">No content generated yet. Click Generate to create headline &amp; caption.</p>
+      {/* Scanned post content */}
+      {(card.image_url || card.content) && (
+        <div className="mx-4 mb-3 rounded-xl overflow-hidden border border-gray-700 bg-gray-800">
+          {card.image_url && (
+            <img src={card.image_url} alt="" className="w-full max-h-52 object-cover"
+              loading="lazy" onError={e => { e.currentTarget.style.display = 'none' }} />
           )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-auto pt-3 border-t border-gray-800">
-            <button onClick={() => onGenerate(card.id)} disabled={!!generating}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
-              {generating
-                ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
-                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate' : 'Generate'}</>
-              }
-            </button>
-            <button onClick={() => onMarkPosted(card.id)}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors ml-auto">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Mark as Posted
-            </button>
-          </div>
+          {card.content && (
+            <p className="px-3 py-2.5 text-sm text-gray-300 leading-relaxed">{card.content}</p>
+          )}
         </div>
+      )}
+
+      {/* Stats */}
+      {(card.total_interactions > 0 || card.velocity > 0) && (
+        <div className="flex items-center gap-4 px-4 mb-3 text-xs text-gray-500">
+          {card.total_interactions > 0 && <span>Interactions <span className="text-gray-300 font-medium">{formatNumber(card.total_interactions)}</span></span>}
+          {card.velocity > 0 && <span>Velocity <span className="text-orange-400 font-medium">{card.velocity}/hr</span></span>}
+        </div>
+      )}
+
+      {/* Paste area */}
+      <div className="mx-4 mb-3">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+          Paste full article / post content
+        </label>
+        <textarea
+          value={pasteContent}
+          onChange={e => setPasteContent(e.target.value)}
+          rows={3}
+          placeholder="Go to the source link, copy the full text, paste here…"
+          className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-400 resize-y"
+        />
+      </div>
+
+      {/* Generated content */}
+      {hasGenerated && (
+        <div className="mx-4 mb-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl space-y-3">
+          {headline && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Headline</p>
+              <div className="flex items-start gap-2">
+                <p className="flex-1 text-sm font-semibold text-white leading-relaxed">{headline}</p>
+                <CopyButton text={headline} />
+              </div>
+            </div>
+          )}
+          {caption && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-1.5">Caption</p>
+              <div className="flex items-start gap-2">
+                <p className="flex-1 text-sm text-gray-200 leading-relaxed">{caption}</p>
+                <CopyButton text={caption} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="px-4 pb-4 flex items-center gap-2">
+        <button onClick={() => onGenerate(card.id, pasteContent)} disabled={!!generating}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+          {generating
+            ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
+            : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate' : 'Generate Headline & Caption'}</>
+          }
+        </button>
+        <button onClick={() => onMarkPosted(card.id)}
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-colors ml-auto">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Mark as Posted
+        </button>
       </div>
     </div>
   )
@@ -489,14 +514,14 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
     showToast('Marked as posted')
   }
 
-  async function generateContent(cardId) {
+  async function generateContent(cardId, sourceContent) {
     setGenerating(prev => ({ ...prev, [cardId]: true }))
     const token = await getToken()
     try {
       const res = await fetch('/api/triage/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cardId, type: 'both' }),
+        body: JSON.stringify({ cardId, type: 'both', ...(sourceContent?.trim() ? { sourceContent } : {}) }),
       })
       const data = await res.json()
       if (res.ok && (data.headline || data.caption)) {
