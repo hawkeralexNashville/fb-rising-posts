@@ -186,17 +186,21 @@ export default function TriageSetup({ supabase, session, streams }) {
     setUploadingImage(true)
     let imageUrl = null
     if (newExampleImage) {
-      const ext = newExampleImage.name.split('.').pop()
-      const path = `${userId}/${Date.now()}.${ext}`
-      const { data, error } = await supabase.storage.from('triage-example-images').upload(path, newExampleImage, { upsert: false })
-      if (!error && data) {
-        const { data: { publicUrl } } = supabase.storage.from('triage-example-images').getPublicUrl(data.path)
-        imageUrl = publicUrl
-      } else if (error) {
-        showToastMsg('Image upload failed: ' + error.message, 'error')
+      const token = await getToken()
+      const form = new FormData()
+      form.append('file', newExampleImage)
+      const res = await fetch('/api/triage/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        showToastMsg('Image upload failed: ' + result.error, 'error')
         setUploadingImage(false)
         return
       }
+      imageUrl = result.url
     }
     setExamplePosts(prev => [...prev, { url: newExampleUrl.trim() || null, content: newExampleContent.trim() || null, image_url: imageUrl }])
     setNewExampleUrl('')
