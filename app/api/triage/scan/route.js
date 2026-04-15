@@ -172,7 +172,7 @@ export async function POST(request) {
     await pollApify(runId, apifyToken)
     const rawResults = await getApifyResults(runId, apifyToken)
 
-    const normalized = rawResults.map(normalizePost).filter(p => p.total_interactions > 0 && p.url)
+    const normalized = rawResults.map(normalizePost).filter(p => p.total_interactions > 0 && p.url && !p.url.includes('/reel/'))
 
     // Dedup
     const { data: existing } = await db.from('triage_cards').select('url').eq('triage_page_id', triagePageId).limit(2000)

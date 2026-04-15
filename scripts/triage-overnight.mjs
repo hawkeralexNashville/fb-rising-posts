@@ -242,7 +242,7 @@ export async function runTriageScan(page, apifyToken) {
   const rawResults = await getApifyResults(runId, apifyToken)
   console.log(`[triage] ${page.name}: ${rawResults.length} raw results`)
 
-  const normalized = rawResults.map(normalizePost).filter(p => p.total_interactions > 0 && p.url)
+  const normalized = rawResults.map(normalizePost).filter(p => p.total_interactions > 0 && p.url && !p.url.includes('/reel/'))
 
   // Deduplicate against existing cards
   const existing = await sb(
