@@ -94,7 +94,7 @@ export async function PATCH(request) {
     await db.from('triage_example_posts').delete().eq('triage_page_id', id)
     if (example_posts.length) {
       await db.from('triage_example_posts').insert(
-        example_posts.map(e => ({ triage_page_id: id, url: e.url || null, content: e.content || null }))
+        example_posts.map(e => ({ triage_page_id: id, url: e.url || null, content: e.content || null, image_url: e.image_url || null }))
       )
     }
   }
