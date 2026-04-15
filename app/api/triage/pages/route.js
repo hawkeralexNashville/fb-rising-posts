@@ -26,21 +26,35 @@ export async function GET(request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = svc()
-  const { data: pages, error } = await db.from('triage_pages').select('*').eq('user_id', user.id).order('created_at')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!pages.length) return NextResponse.json([])
 
-  const ids = pages.map(p => p.id)
-  const [{ data: keywords }, { data: examplePosts }] = await Promise.all([
-    db.from('triage_rss_keywords').select('*').in('triage_page_id', ids).order('created_at'),
-    db.from('triage_example_posts').select('*').in('triage_page_id', ids).order('created_at'),
+  const [{ data: ownedPages, error }, { data: collabPages }] = await Promise.all([
+    db.from('triage_pages').select('*').eq('user_id', user.id).order('created_at'),
+    db.from('triage_pages').select('id, name').ilike('collaborator_email', user.email || '').order('created_at'),
   ])
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json(pages.map(p => ({
+  // Owned pages — full data with keywords and example posts
+  const ownedIds = (ownedPages || []).map(p => p.id)
+  const [{ data: keywords }, { data: examplePosts }] = ownedIds.length
+    ? await Promise.all([
+        db.from('triage_rss_keywords').select('*').in('triage_page_id', ownedIds).order('created_at'),
+        db.from('triage_example_posts').select('*').in('triage_page_id', ownedIds).order('created_at'),
+      ])
+    : [{ data: [] }, { data: [] }]
+
+  const owned = (ownedPages || []).map(p => ({
     ...p,
+    role: 'owner',
     keywords: keywords?.filter(k => k.triage_page_id === p.id) ?? [],
     example_posts: examplePosts?.filter(e => e.triage_page_id === p.id) ?? [],
-  })))
+  }))
+
+  // Collaborator pages — minimal data (no keywords/prompts exposed to executor)
+  const collab = (collabPages || [])
+    .filter(p => !ownedIds.includes(p.id))
+    .map(p => ({ id: p.id, name: p.name, role: 'collaborator', keywords: [], example_posts: [] }))
+
+  return NextResponse.json([...owned, ...collab])
 }
 
 // POST — create a new triage page
@@ -77,6 +91,11 @@ export async function PATCH(request) {
   const db = svc()
   const { data: existing } = await db.from('triage_pages').select('id').eq('id', id).eq('user_id', user.id).single()
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Normalize collaborator email
+  if (fields.collaborator_email !== undefined) {
+    fields.collaborator_email = fields.collaborator_email?.trim().toLowerCase() || null
+  }
 
   const { error } = await db.from('triage_pages').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

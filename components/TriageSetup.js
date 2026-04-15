@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-const TABS = ['Persona', 'Example Posts', 'RSS Keywords', 'Prompts', 'Schedule']
+const TABS = ['Persona', 'Example Posts', 'RSS Keywords', 'Prompts', 'Schedule', 'Collaborator']
 
 const DEFAULT_SCAN_TIMES = ['22:00', '01:00', '04:00']
 
@@ -46,6 +46,7 @@ export default function TriageSetup({ supabase, session, streams }) {
   const [scanTimes, setScanTimes] = useState(DEFAULT_SCAN_TIMES)
   const [scanWindowHours, setScanWindowHours] = useState(6)
   const [scanEnabled, setScanEnabled] = useState(true)
+  const [collaboratorEmail, setCollaboratorEmail] = useState('')
 
   const userId = session?.user?.id
 
@@ -79,6 +80,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     setScanTimes(page.scan_times || DEFAULT_SCAN_TIMES)
     setScanWindowHours(page.scan_window_hours || 6)
     setScanEnabled(page.scan_enabled !== false)
+    setCollaboratorEmail(page.collaborator_email || '')
     setScanResult(null)
   }
 
@@ -138,6 +140,8 @@ export default function TriageSetup({ supabase, session, streams }) {
       body = { ...body, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt }
     } else if (tab === 4) {
       body = { ...body, scan_times: scanTimes, scan_window_hours: scanWindowHours, scan_enabled: scanEnabled }
+    } else if (tab === 5) {
+      body = { ...body, collaborator_email: collaboratorEmail.trim().toLowerCase() || null }
     }
 
     const res = await fetch('/api/triage/pages', {
@@ -657,6 +661,62 @@ export default function TriageSetup({ supabase, session, streams }) {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                         {scanning ? 'Scanning…' : 'Scan Now'}
                       </button>
+                    </div>
+                  </div>
+                )}
+
+
+
+                {/* ─── Collaborator Tab ─── */}
+                {tab === 5 && (
+                  <div className="p-6 max-w-lg space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white mb-1">Executor Access</h3>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        Enter your executor's email address. When they sign in, they'll see this page in Executor-only mode — they can generate content and mark posts as done, but cannot access setup, settings, or run scans.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                        Executor Email
+                      </label>
+                      <input
+                        type="email"
+                        value={collaboratorEmail}
+                        onChange={e => setCollaboratorEmail(e.target.value)}
+                        placeholder="executor@example.com"
+                        className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-400"
+                      />
+                      <p className="text-xs text-gray-600 mt-1.5">They must sign up at this app with this exact email address.</p>
+                    </div>
+
+                    {collaboratorEmail && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 space-y-1">
+                        <p className="font-semibold">Access summary for {collaboratorEmail}:</p>
+                        <p>✓ Can view Executor tab and today's top 5</p>
+                        <p>✓ Can generate headline &amp; caption</p>
+                        <p>✓ Can mark posts as posted</p>
+                        <p>✗ Cannot run scans, change settings, or view other tabs</p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={saveCurrentTab}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+                      >
+                        {saving ? 'Saving…' : collaboratorEmail ? 'Save Collaborator' : 'Remove Collaborator'}
+                      </button>
+                      {collaboratorEmail && (
+                        <button
+                          onClick={() => { setCollaboratorEmail(''); }}
+                          className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          Clear (remove access)
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

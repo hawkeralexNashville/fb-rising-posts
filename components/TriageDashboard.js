@@ -266,8 +266,9 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
 
 function ExecutorCard({ card, rank, onMarkPosted, onGenerate, generating, localGenerated }) {
   const [pasteContent, setPasteContent] = useState('')
-  const headline = localGenerated?.headline ?? card.generated_headline
-  const caption = localGenerated?.caption ?? card.generated_caption
+  // Always start fresh in the Executor — never show saved DB values
+  const headline = localGenerated?.headline
+  const caption = localGenerated?.caption
   const hasGenerated = headline || caption
   const isFacebook = card.source_type === 'facebook'
 
@@ -395,7 +396,7 @@ function ExecutorCard({ card, rank, onMarkPosted, onGenerate, generating, localG
 export default function TriageDashboard({ supabase, session, onOpenSetup }) {
   const [pages, setPages] = useState([])
   const [selectedPageId, setSelectedPageId] = useState(null)
-  const [tab, setTab] = useState('cards') // cards | archive | log
+  const [tab, setTab] = useState('cards') // cards | executor | archive | log
   const [sourceFilter, setSourceFilter] = useState('all')
 
   const [cards, setCards] = useState([])
@@ -444,6 +445,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
   }
 
   function selectPage(pageId) {
+    const page = pages.find(p => p.id === pageId)
     setSelectedPageId(pageId)
     setCards([])
     setArchivedCards([])
@@ -451,7 +453,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
     setCardsOffset(0)
     setArchivedOffset(0)
     setLocalGenerated({})
-    setTab('cards')
+    setTab(page?.role === 'collaborator' ? 'executor' : 'cards')
     loadCards(pageId, 0)
   }
 
@@ -609,6 +611,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
   }
 
   const selectedPage = pages.find(p => p.id === selectedPageId)
+  const isCollaborator = selectedPage?.role === 'collaborator'
 
   const filteredCards = sourceFilter === 'all' ? cards
     : sourceFilter === 'facebook' ? cards.filter(c => c.source_type === 'facebook')
@@ -642,7 +645,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
             </button>
           ))}
         </div>
-        <div className="p-3 border-t border-gray-800">
+        {pages.some(p => p.role === 'owner') && <div className="p-3 border-t border-gray-800">
           <button
             onClick={onOpenSetup}
             className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
@@ -650,7 +653,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
             Triage Setup
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Main content */}
@@ -666,12 +669,15 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
               <div className="flex items-center gap-4">
                 <h2 className="text-lg font-bold text-white">{selectedPage.name}</h2>
                 <div className="flex gap-0.5">
-                  {[
-                    { key: 'cards', label: `Cards${cards.length ? ` (${cards.length}${cardsHasMore ? '+' : ''})` : ''}` },
-                    { key: 'executor', label: 'Executor' },
-                    { key: 'archive', label: 'Archive' },
-                    { key: 'log', label: 'Scan Log' },
-                  ].map(t => (
+                  {(isCollaborator
+                    ? [{ key: 'executor', label: 'Executor' }]
+                    : [
+                        { key: 'cards', label: `Cards${cards.length ? ` (${cards.length}${cardsHasMore ? '+' : ''})` : ''}` },
+                        { key: 'executor', label: 'Executor' },
+                        { key: 'archive', label: 'Archive' },
+                        { key: 'log', label: 'Scan Log' },
+                      ]
+                  ).map(t => (
                     <button
                       key={t.key}
                       onClick={() => switchTab(t.key)}
@@ -682,6 +688,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                   ))}
                 </div>
               </div>
+              {!isCollaborator && (
               <button
                 onClick={runScanNow}
                 disabled={scanning}
@@ -690,6 +697,7 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 {scanning ? 'Scanning…' : 'Scan Now'}
               </button>
+              )}
             </div>
 
             {/* Tab content */}
