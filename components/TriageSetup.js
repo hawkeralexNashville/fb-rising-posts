@@ -44,6 +44,7 @@ export default function TriageSetup({ supabase, session, streams }) {
   const [captionPrompt, setCaptionPrompt] = useState('')
   const [relevancePrompt, setRelevancePrompt] = useState('')
   const [scanTimes, setScanTimes] = useState(DEFAULT_SCAN_TIMES)
+  const [scanWindowHours, setScanWindowHours] = useState(6)
 
   const userId = session?.user?.id
 
@@ -75,6 +76,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     setCaptionPrompt(page.caption_prompt || '')
     setRelevancePrompt(page.relevance_prompt || '')
     setScanTimes(page.scan_times || DEFAULT_SCAN_TIMES)
+    setScanWindowHours(page.scan_window_hours || 6)
     setScanResult(null)
   }
 
@@ -133,7 +135,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     } else if (tab === 3) {
       body = { ...body, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt }
     } else if (tab === 4) {
-      body = { ...body, scan_times: scanTimes }
+      body = { ...body, scan_times: scanTimes, scan_window_hours: scanWindowHours }
     }
 
     const res = await fetch('/api/triage/pages', {
@@ -143,7 +145,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     })
     const data = await res.json()
     if (res.ok) {
-      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes } : p))
+      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes, scan_window_hours: scanWindowHours } : p))
       showToastMsg('Saved!')
     } else {
       showToastMsg(data.error || 'Failed to save', 'error')
@@ -525,10 +527,26 @@ export default function TriageSetup({ supabase, session, streams }) {
                 {/* ─── Schedule Tab ─── */}
                 {tab === 4 && (
                   <div className="max-w-xl space-y-6">
+
+                    {/* Status indicator */}
+                    {streamId ? (
+                      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                        <p className="text-sm text-emerald-300 font-medium">Schedule active</p>
+                        <p className="text-xs text-emerald-600 ml-auto">Runs at {selectedPage?.scan_times?.join(', ') || scanTimes.join(', ')} CT</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                        <p className="text-sm text-amber-300 font-medium">No stream linked</p>
+                        <p className="text-xs text-amber-600 ml-1">— schedule won't run until a stream is set in the Persona tab</p>
+                      </div>
+                    )}
+
                     <div>
                       <p className="text-sm text-gray-300 font-medium mb-1">Overnight Scan Schedule</p>
                       <p className="text-sm text-gray-500 mb-5">
-                        Configure up to 6 scan times (Central Time). The GitHub Actions workflow runs every 30 minutes and triggers scans within a ±20-minute window of each configured time.
+                        Configure up to 6 scan times (Central Time). The GitHub Actions workflow checks every 30 minutes and fires scans within a ±20-minute window of each saved time. Changes take effect after clicking <strong className="text-gray-400">Save Schedule</strong>.
                       </p>
 
                       <div className="space-y-3">
@@ -560,6 +578,21 @@ export default function TriageSetup({ supabase, session, streams }) {
                           Add time
                         </button>
                       )}
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-300 font-medium mb-1">Scan Window</p>
+                      <p className="text-sm text-gray-500 mb-3">How far back each scan looks for posts. Applies to both scheduled and manual scans.</p>
+                      <select
+                        value={scanWindowHours}
+                        onChange={e => setScanWindowHours(Number(e.target.value))}
+                        className="w-full px-4 py-2.5 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 focus:outline-none focus:border-indigo-400 appearance-none cursor-pointer"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '40px' }}
+                      >
+                        {[6, 12, 24, 48, 72].map(h => (
+                          <option key={h} value={h}>Last {h} hours</option>
+                        ))}
+                      </select>
                     </div>
 
                     <button onClick={saveCurrentTab} disabled={saving} className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">

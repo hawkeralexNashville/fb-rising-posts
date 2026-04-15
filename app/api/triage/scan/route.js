@@ -6,7 +6,6 @@ export const maxDuration = 300
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const SCAN_TIME_WINDOW_HOURS = 6
 const RESULTS_LIMIT = 20
 
 function svc() {
@@ -28,8 +27,8 @@ async function getUser(request) {
   return user
 }
 
-async function startApify(pageUrls, token) {
-  const newerThan = new Date(Date.now() - SCAN_TIME_WINDOW_HOURS * 3600000).toISOString()
+async function startApify(pageUrls, token, windowHours = 6) {
+  const newerThan = new Date(Date.now() - windowHours * 3600000).toISOString()
   const res = await fetch(
     `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${token}`,
     {
@@ -169,7 +168,7 @@ export async function POST(request) {
   if (!pageUrls.length) return NextResponse.json({ error: 'No valid Facebook pages in this stream' }, { status: 400 })
 
   try {
-    const runId = await startApify(pageUrls, apifyToken)
+    const runId = await startApify(pageUrls, apifyToken, page.scan_window_hours || 6)
     await pollApify(runId, apifyToken)
     const rawResults = await getApifyResults(runId, apifyToken)
 

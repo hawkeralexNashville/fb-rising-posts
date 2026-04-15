@@ -55,11 +55,11 @@ export async function POST(request) {
     name: body.name?.trim(),
     stream_id: body.stream_id || null,
     persona: body.persona || '',
-    persona_prompt: body.persona_prompt || '',
     headline_prompt: body.headline_prompt || '',
     caption_prompt: body.caption_prompt || '',
     relevance_prompt: body.relevance_prompt || '',
     scan_times: body.scan_times || ['22:00', '01:00', '04:00'],
+    scan_window_hours: body.scan_window_hours || 6,
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ...data, keywords: [], example_posts: [] })

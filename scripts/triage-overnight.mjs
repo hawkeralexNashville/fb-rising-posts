@@ -5,7 +5,6 @@
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-const SCAN_TIME_WINDOW_HOURS = 6
 const RESULTS_LIMIT = 20
 const SCAN_MATCH_WINDOW_MINUTES = 20 // ±20 min window around configured time
 
@@ -42,8 +41,8 @@ function timeMatchesCT(configuredTime) {
 }
 
 // ─── Apify helpers ───
-async function startApifyScan(pageUrls, apifyToken) {
-  const newerThan = new Date(Date.now() - SCAN_TIME_WINDOW_HOURS * 3600000).toISOString()
+async function startApifyScan(pageUrls, apifyToken, windowHours = 6) {
+  const newerThan = new Date(Date.now() - windowHours * 3600000).toISOString()
   const res = await fetch(
     `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${apifyToken}`,
     {
@@ -238,7 +237,7 @@ export async function runTriageScan(page, apifyToken) {
   const examplePosts = examplePostsResult || []
 
   console.log(`[triage] ${page.name}: ${pageUrls.length} pages → starting Apify`)
-  const runId = await startApifyScan(pageUrls, apifyToken)
+  const runId = await startApifyScan(pageUrls, apifyToken, page.scan_window_hours || 6)
   await pollApifyRun(runId, apifyToken)
   const rawResults = await getApifyResults(runId, apifyToken)
   console.log(`[triage] ${page.name}: ${rawResults.length} raw results`)
