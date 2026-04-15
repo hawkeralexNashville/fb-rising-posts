@@ -20,13 +20,49 @@ async function getUser(request) {
   return user
 }
 
+async function callOpenAI(systemPrompt, userContent) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      max_tokens: 400,
+      temperature: 0.75,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || `OpenAI error ${res.status}`)
+  }
+  const data = await res.json()
+  const text = (data.choices?.[0]?.message?.content || '').trim()
+  if (!text) throw new Error('Empty response from OpenAI')
+  return text
+}
+
+function buildUserContent(textPrompt, exampleImages) {
+  if (exampleImages.length === 0) return textPrompt
+  return [
+    { type: 'text', text: 'The following images are example posts from this page — use them as style and tone reference:\n' },
+    ...exampleImages.map(url => ({ type: 'image_url', image_url: { url, detail: 'low' } })),
+    { type: 'text', text: '\n' + textPrompt },
+  ]
+}
+
 export async function POST(request) {
   const user = await getUser(request)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { cardId, type } = await request.json()
-  if (!cardId || !['headline', 'caption'].includes(type)) {
-    return NextResponse.json({ error: 'Missing cardId or invalid type (headline|caption)' }, { status: 400 })
+  const { cardId, type, sourceContent } = await request.json()
+  if (!cardId || !['headline', 'caption', 'both'].includes(type)) {
+    return NextResponse.json({ error: 'Missing cardId or invalid type (headline|caption|both)' }, { status: 400 })
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -45,62 +81,47 @@ export async function POST(request) {
   const { data: examplePosts } = await db.from('triage_example_posts').select('image_url, content, url').eq('triage_page_id', page.id).limit(4)
   const exampleImages = (examplePosts || []).map(e => e.image_url).filter(Boolean)
 
+  // Build content block — prefer pasted sourceContent, fall back to card content
   const contentBlock = [
     card.title ? `Source: ${card.title}` : null,
     card.url ? `URL: ${card.url}` : null,
-    card.content ? `Content: ${card.content.slice(0, 800)}` : null,
+    sourceContent
+      ? `Content: ${sourceContent.slice(0, 1500)}`
+      : (card.content ? `Content: ${card.content.slice(0, 800)}` : null),
   ].filter(Boolean).join('\n')
 
-  let systemPrompt, textPrompt
+  const persona = page.persona || 'General Facebook audience'
 
-  if (type === 'headline') {
-    systemPrompt = page.headline_prompt ||
-      'You are a social media content writer for a Facebook page. Write a single engaging Facebook post headline for the content below. Make it attention-grabbing and conversational. Return ONLY the headline — no quotes, no hashtags, no explanation.'
-    textPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT TO WRITE HEADLINE FOR:\n${contentBlock}`
-  } else {
-    systemPrompt = page.caption_prompt ||
-      'You are a social media content writer for a Facebook page. Write an engaging Facebook post caption (2–4 sentences). Be conversational, relatable, and end with a question or call to action that encourages comments. Return ONLY the caption — no quotes, no hashtags, no explanation.'
-    textPrompt = `AUDIENCE PERSONA:\n${page.persona || 'General Facebook audience'}\n\nCONTENT TO WRITE CAPTION FOR:\n${contentBlock}`
-  }
+  const headlineSystemPrompt = page.headline_prompt ||
+    'You are a social media content writer for a Facebook page. Write a single engaging Facebook post headline for the content below. Make it attention-grabbing and conversational. Return ONLY the headline — no quotes, no hashtags, no explanation.'
 
-  // Build multimodal user content — include example post images for style reference
-  const userContent = exampleImages.length > 0
-    ? [
-        { type: 'text', text: `The following images are example posts from this page — use them as style and tone reference:\n` },
-        ...exampleImages.map(url => ({ type: 'image_url', image_url: { url, detail: 'low' } })),
-        { type: 'text', text: '\n' + textPrompt },
-      ]
-    : textPrompt
+  const captionSystemPrompt = page.caption_prompt ||
+    'You are a social media content writer for a Facebook page. Write an engaging Facebook post caption (2–4 sentences). Be conversational, relatable, and end with a question or call to action that encourages comments. Return ONLY the caption — no quotes, no hashtags, no explanation.'
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-        max_tokens: 400,
-        temperature: 0.75,
-      }),
-    })
+    if (type === 'both') {
+      const headlinePromptText = `AUDIENCE PERSONA:\n${persona}\n\nCONTENT TO WRITE HEADLINE FOR:\n${contentBlock}`
+      const captionPromptText = `AUDIENCE PERSONA:\n${persona}\n\nCONTENT TO WRITE CAPTION FOR:\n${contentBlock}`
 
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error?.message || `OpenAI error ${res.status}`)
+      const [headline, caption] = await Promise.all([
+        callOpenAI(headlineSystemPrompt, buildUserContent(headlinePromptText, exampleImages)),
+        callOpenAI(captionSystemPrompt, buildUserContent(captionPromptText, exampleImages)),
+      ])
+
+      try {
+        await db.from('triage_cards').update({ generated_headline: headline, generated_caption: caption }).eq('id', cardId)
+      } catch {}
+
+      return NextResponse.json({ headline, caption })
     }
 
-    const data = await res.json()
-    const text = (data.choices?.[0]?.message?.content || '').trim()
-    if (!text) throw new Error('Empty response from OpenAI')
+    // Single-type generation (headline or caption) — kept for backward compatibility
+    const isHeadline = type === 'headline'
+    const systemPrompt = isHeadline ? headlineSystemPrompt : captionSystemPrompt
+    const textPrompt = `AUDIENCE PERSONA:\n${persona}\n\nCONTENT TO WRITE ${isHeadline ? 'HEADLINE' : 'CAPTION'} FOR:\n${contentBlock}`
+    const text = await callOpenAI(systemPrompt, buildUserContent(textPrompt, exampleImages))
 
-    // Save to card — gracefully ignore if column doesn't exist yet
-    const field = type === 'headline' ? 'generated_headline' : 'generated_caption'
+    const field = isHeadline ? 'generated_headline' : 'generated_caption'
     try {
       await db.from('triage_cards').update({ [field]: text }).eq('id', cardId)
     } catch {}

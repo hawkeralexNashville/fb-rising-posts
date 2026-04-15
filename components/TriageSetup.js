@@ -40,7 +40,6 @@ export default function TriageSetup({ supabase, session, streams }) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [keywords, setKeywords] = useState([])
   const [newKeyword, setNewKeyword] = useState('')
-  const [personaPrompt, setPersonaPrompt] = useState('')
   const [headlinePrompt, setHeadlinePrompt] = useState('')
   const [captionPrompt, setCaptionPrompt] = useState('')
   const [relevancePrompt, setRelevancePrompt] = useState('')
@@ -72,7 +71,6 @@ export default function TriageSetup({ supabase, session, streams }) {
     setStreamId(page.stream_id || '')
     setExamplePosts(page.example_posts || [])
     setKeywords(page.keywords?.map(k => k.keyword) || [])
-    setPersonaPrompt(page.persona_prompt || '')
     setHeadlinePrompt(page.headline_prompt || '')
     setCaptionPrompt(page.caption_prompt || '')
     setRelevancePrompt(page.relevance_prompt || '')
@@ -133,7 +131,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     } else if (tab === 2) {
       body = { ...body, keywords }
     } else if (tab === 3) {
-      body = { ...body, persona_prompt: personaPrompt, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt }
+      body = { ...body, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt }
     } else if (tab === 4) {
       body = { ...body, scan_times: scanTimes }
     }
@@ -145,7 +143,7 @@ export default function TriageSetup({ supabase, session, streams }) {
     })
     const data = await res.json()
     if (res.ok) {
-      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, persona_prompt: personaPrompt, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes } : p))
+      setPages(prev => prev.map(p => p.id === selectedPageId ? { ...p, persona, stream_id: streamId || null, headline_prompt: headlinePrompt, caption_prompt: captionPrompt, relevance_prompt: relevancePrompt, scan_times: scanTimes } : p))
       showToastMsg('Saved!')
     } else {
       showToastMsg(data.error || 'Failed to save', 'error')
@@ -488,18 +486,6 @@ export default function TriageSetup({ supabase, session, streams }) {
                       <textarea
                         value={relevancePrompt}
                         onChange={e => setRelevancePrompt(e.target.value)}
-                        rows={4}
-                        placeholder="Leave blank for default…"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 resize-y"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Persona Prompt</label>
-                      <p className="text-xs text-gray-600 mb-2">Used when generating audience persona suggestions.</p>
-                      <textarea
-                        value={personaPrompt}
-                        onChange={e => setPersonaPrompt(e.target.value)}
                         rows={4}
                         placeholder="Leave blank for default…"
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 resize-y"
