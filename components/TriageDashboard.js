@@ -75,8 +75,8 @@ function groupCards(cards) {
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .map(g => {
       const sorted = [...g.cards].sort((a, b) =>
-        ((b.ai_relevance_score || 0) * 10 + (b.velocity || 0)) -
-        ((a.ai_relevance_score || 0) * 10 + (a.velocity || 0))
+        ((b.velocity || 0) * 10 + (b.ai_relevance_score || 0)) -
+        ((a.velocity || 0) * 10 + (a.ai_relevance_score || 0))
       )
       return { ...g, top: sorted.slice(0, 5), others: sorted.slice(5) }
     })
@@ -250,23 +250,50 @@ function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerat
   const headline = localGenerated?.headline ?? card.generated_headline
   const caption = localGenerated?.caption ?? card.generated_caption
   const hasGenerated = headline || caption
+  const isFacebook = card.source_type === 'facebook'
 
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-3 flex-wrap">
-        <SourceBadge type={card.source_type} />
-        {card.title && <span className="text-sm font-semibold text-orange-400 truncate max-w-[220px]">{card.title}</span>}
-        <span className="text-xs text-gray-500">{timeAgo(card.created_at)}</span>
-        {card.url && (
-          <a href={card.url} target="_blank" rel="noopener noreferrer"
-            className="ml-auto shrink-0 text-gray-600 hover:text-orange-400 transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-              <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </a>
+      {/* Hero stats bar */}
+      <div className="flex items-center gap-4 px-4 pt-4 pb-3 border-b border-gray-800">
+        {isFacebook ? (
+          <>
+            <div>
+              <span className="text-2xl font-black text-orange-400 leading-none">{card.velocity ?? 0}</span>
+              <span className="text-sm font-semibold text-orange-400/60 ml-0.5">/hr</span>
+              <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">velocity</p>
+            </div>
+            <div className="w-px h-8 bg-gray-700" />
+            <div>
+              <span className="text-xl font-bold text-gray-200 leading-none">{formatNumber(card.total_interactions)}</span>
+              <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-0.5">interactions</p>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold uppercase tracking-wider">Breaking</span>
+            <span className="text-xs text-gray-500">{timeAgo(card.created_at)}</span>
+          </div>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          {card.ai_relevance_score != null && <ScoreBadge score={card.ai_relevance_score} />}
+          {card.url && (
+            <a href={card.url} target="_blank" rel="noopener noreferrer"
+              className="text-gray-600 hover:text-orange-400 transition-colors">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Source label + title */}
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2 flex-wrap">
+        <SourceBadge type={card.source_type} />
+        {card.title && <span className="text-sm font-semibold text-orange-400 truncate max-w-[280px]">{card.title}</span>}
+        {isFacebook && <span className="text-xs text-gray-500">{timeAgo(card.created_at)}</span>}
       </div>
 
       {/* Scanned post content */}
@@ -279,14 +306,6 @@ function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerat
           {card.content && (
             <p className="px-3 py-2.5 text-sm text-gray-300 leading-relaxed">{card.content}</p>
           )}
-        </div>
-      )}
-
-      {/* Stats */}
-      {(card.total_interactions > 0 || card.velocity > 0) && (
-        <div className="flex items-center gap-4 px-4 mb-3 text-xs text-gray-500">
-          {card.total_interactions > 0 && <span>Interactions <span className="text-gray-300 font-medium">{formatNumber(card.total_interactions)}</span></span>}
-          {card.velocity > 0 && <span>Velocity <span className="text-orange-400 font-medium">{card.velocity}/hr</span></span>}
         </div>
       )}
 
@@ -710,27 +729,33 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
               )}
 
               {/* ─── Executor Tab ─── */}
-              {tab === 'executor' && (
-                <div className="p-5 max-w-3xl">
-                  <div className="mb-5">
-                    <p className="text-xs text-gray-500">Top 5 unposted cards per scan — ready to create posts from. Click Generate, copy the content, then mark as posted.</p>
-                  </div>
+              {tab === 'executor' && (() => {
+                const unposted = cards.filter(c => !c.is_posted)
+                const fbCards = unposted
+                  .filter(c => c.source_type === 'facebook')
+                  .sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
+                  .slice(0, 10)
+                const rssCards = unposted
+                  .filter(c => c.source_type === 'rss')
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                  .slice(0, 10)
 
-                  {cards.filter(c => !c.is_posted).length === 0 && (
-                    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
-                      <p className="text-gray-500 text-sm">No cards yet. Run a scan first.</p>
-                    </div>
-                  )}
-
-                  {groupCards(cards.filter(c => !c.is_posted)).map(group => (
-                    <div key={group.key} className="mb-10">
-                      <div className="flex items-center gap-3 mb-4">
-                        <p className="text-sm font-bold text-white shrink-0">{formatScanDate(group.timestamp)}</p>
-                        <SourceBadge type={group.source} />
-                        <div className="flex-1 h-px bg-gray-800" />
+                const ExecutorSection = ({ label, sublabel, cards: sectionCards, accent }) => (
+                  <div className="mb-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="shrink-0">
+                        <p className={`text-sm font-bold ${accent}`}>{label}</p>
+                        <p className="text-xs text-gray-500">{sublabel}</p>
                       </div>
-                      <div className="space-y-3">
-                        {group.top.map(card => (
+                      <div className="flex-1 h-px bg-gray-800" />
+                    </div>
+                    {sectionCards.length === 0 ? (
+                      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center">
+                        <p className="text-gray-500 text-sm">No results yet. Run a scan first.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {sectionCards.map(card => (
                           <ExecutorCard
                             key={card.id}
                             card={card}
@@ -741,10 +766,27 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                           />
                         ))}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </div>
+                )
+
+                return (
+                  <div className="p-5 max-w-3xl">
+                    <ExecutorSection
+                      label="📘 Trending on Facebook"
+                      sublabel="Sorted by velocity — highest interactions/hr first"
+                      cards={fbCards}
+                      accent="text-blue-300"
+                    />
+                    <ExecutorSection
+                      label="📰 Breaking News (RSS)"
+                      sublabel="Sorted by recency — newest first"
+                      cards={rssCards}
+                      accent="text-gray-300"
+                    />
+                  </div>
+                )
+              })()}
 
               {/* ─── Archive Tab ─── */}
               {tab === 'archive' && (
