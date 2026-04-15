@@ -51,6 +51,95 @@ function CopyButton({ text }) {
   )
 }
 
+function formatScanDate(dateStr) {
+  if (!dateStr) return 'Unknown time'
+  return new Date(dateStr).toLocaleString('en-US', {
+    month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+}
+
+function groupCards(cards) {
+  const map = new Map()
+  for (const card of cards) {
+    const key = card.scan_run_id
+      ? `fb-${card.scan_run_id}`
+      : `rss-${(card.created_at || '').slice(0, 13)}` // bucket RSS by hour
+    if (!map.has(key)) {
+      map.set(key, { key, source: card.scan_run_id ? 'facebook' : 'rss', timestamp: card.created_at, cards: [] })
+    }
+    const g = map.get(key)
+    g.cards.push(card)
+    if (card.created_at && card.created_at < g.timestamp) g.timestamp = card.created_at
+  }
+  return [...map.values()]
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .map(g => {
+      const sorted = [...g.cards].sort((a, b) =>
+        ((b.ai_relevance_score || 0) * 10 + (b.velocity || 0)) -
+        ((a.ai_relevance_score || 0) * 10 + (a.velocity || 0))
+      )
+      return { ...g, top: sorted.slice(0, 5), others: sorted.slice(5) }
+    })
+}
+
+function ScanGroup({ group, onArchive, onGenerate, generating, localGenerated }) {
+  const [othersOpen, setOthersOpen] = useState(false)
+  return (
+    <div className="mb-10">
+      {/* Group header */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="shrink-0">
+          <p className="text-sm font-bold text-white">{formatScanDate(group.timestamp)}</p>
+        </div>
+        <SourceBadge type={group.source} />
+        <span className="text-xs text-gray-600">{group.cards.length} result{group.cards.length !== 1 ? 's' : ''}</span>
+        <div className="flex-1 h-px bg-gray-800" />
+      </div>
+
+      {/* Top results */}
+      {group.top.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">Top {group.top.length}</span>
+            <div className="flex-1 h-px bg-indigo-500/20" />
+          </div>
+          <div className="space-y-3">
+            {group.top.map(card => (
+              <TriageCard key={card.id} card={card} onArchive={onArchive} onGenerate={onGenerate}
+                generating={generating[card.id]} localGenerated={localGenerated[card.id]} isArchived={false} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Other results — collapsible */}
+      {group.others.length > 0 && (
+        <div>
+          <button
+            onClick={() => setOthersOpen(v => !v)}
+            className="flex items-center gap-2 w-full py-2 text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              style={{ transform: othersOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            {othersOpen ? 'Hide' : 'Show'} {group.others.length} other result{group.others.length !== 1 ? 's' : ''}
+            <div className="flex-1 h-px bg-gray-800 ml-1" />
+          </button>
+          {othersOpen && (
+            <div className="space-y-3 mt-3">
+              {group.others.map(card => (
+                <TriageCard key={card.id} card={card} onArchive={onArchive} onGenerate={onGenerate}
+                  generating={generating[card.id]} localGenerated={localGenerated[card.id]} isArchived={false} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generating, localGenerated, isArchived }) {
   const [expanded, setExpanded] = useState(false)
   const [pasteContent, setPasteContent] = useState('')
@@ -405,11 +494,9 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
   const selectedPage = pages.find(p => p.id === selectedPageId)
 
   const filteredCards = sourceFilter === 'all' ? cards
-    : sourceFilter === 'top5' ? cards.filter(c => c.is_top_five)
-    : cards.filter(c => c.source_type === sourceFilter)
-
-  const topFiveCards = filteredCards.filter(c => c.is_top_five)
-  const restCards = filteredCards.filter(c => !c.is_top_five)
+    : sourceFilter === 'facebook' ? cards.filter(c => c.source_type === 'facebook')
+    : sourceFilter === 'rss' ? cards.filter(c => c.source_type === 'rss')
+    : cards
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -497,7 +584,6 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                   <div className="flex items-center gap-2 mb-5">
                     {[
                       { key: 'all', label: 'All' },
-                      { key: 'top5', label: '⭐ Top 5' },
                       { key: 'facebook', label: '📘 Facebook' },
                       { key: 'rss', label: '📰 RSS' },
                     ].map(f => (
@@ -524,53 +610,17 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                     </div>
                   )}
 
-                  {/* Top 5 section */}
-                  {topFiveCards.length > 0 && (
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">Top 5</span>
-                        <div className="flex-1 h-px bg-indigo-500/20" />
-                      </div>
-                      <div className="space-y-3">
-                        {topFiveCards.map(card => (
-                          <TriageCard
-                            key={card.id}
-                            card={card}
-                            onArchive={archiveCard}
-                            onGenerate={generateContent}
-                            generating={generating[card.id]}
-                            localGenerated={localGenerated[card.id]}
-                            isArchived={false}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Rest of cards */}
-                  {restCards.length > 0 && (
-                    <div>
-                      {topFiveCards.length > 0 && (
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Other Cards</span>
-                          <div className="flex-1 h-px bg-gray-800" />
-                        </div>
-                      )}
-                      <div className="space-y-3">
-                        {restCards.map(card => (
-                          <TriageCard
-                            key={card.id}
-                            card={card}
-                            onArchive={archiveCard}
-                            onGenerate={generateContent}
-                            generating={generating[card.id]}
-                            localGenerated={localGenerated[card.id]}
-                            isArchived={false}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Grouped scan results */}
+                  {groupCards(filteredCards).map(group => (
+                    <ScanGroup
+                      key={group.key}
+                      group={group}
+                      onArchive={archiveCard}
+                      onGenerate={generateContent}
+                      generating={generating}
+                      localGenerated={localGenerated}
+                    />
+                  ))}
 
                   {cardsHasMore && (
                     <button
