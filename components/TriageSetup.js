@@ -183,6 +183,17 @@ export default function TriageSetup({ supabase, session, streams }) {
     setNewExampleImagePreview(URL.createObjectURL(file))
   }
 
+  async function saveExamplePosts(posts) {
+    const token = await getToken()
+    const res = await fetch('/api/triage/pages', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: selectedPageId, example_posts: posts }),
+    })
+    if (res.ok) showToastMsg('Saved!')
+    else showToastMsg('Failed to save', 'error')
+  }
+
   async function addExamplePost() {
     if (!newExampleUrl.trim() && !newExampleContent.trim() && !newExampleImage) return
     setUploadingImage(true)
@@ -204,16 +215,20 @@ export default function TriageSetup({ supabase, session, streams }) {
       }
       imageUrl = result.url
     }
-    setExamplePosts(prev => [...prev, { url: newExampleUrl.trim() || null, content: newExampleContent.trim() || null, image_url: imageUrl }])
+    const updated = [...examplePosts, { url: newExampleUrl.trim() || null, content: newExampleContent.trim() || null, image_url: imageUrl }]
+    setExamplePosts(updated)
     setNewExampleUrl('')
     setNewExampleContent('')
     setNewExampleImage(null)
     setNewExampleImagePreview(null)
     setUploadingImage(false)
+    await saveExamplePosts(updated)
   }
 
-  function removeExamplePost(i) {
-    setExamplePosts(prev => prev.filter((_, idx) => idx !== i))
+  async function removeExamplePost(i) {
+    const updated = examplePosts.filter((_, idx) => idx !== i)
+    setExamplePosts(updated)
+    await saveExamplePosts(updated)
   }
 
   function addKeyword() {
@@ -439,10 +454,6 @@ export default function TriageSetup({ supabase, session, streams }) {
                         {uploadingImage ? 'Uploading…' : 'Add Example'}
                       </button>
                     </div>
-
-                    <button onClick={saveCurrentTab} disabled={saving} className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
-                      {saving ? 'Saving…' : 'Save'}
-                    </button>
                   </div>
                 )}
 
