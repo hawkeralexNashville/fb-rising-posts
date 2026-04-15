@@ -82,6 +82,25 @@ function groupCards(cards) {
     })
 }
 
+// Unified score for Executor top-5 ranking.
+// Facebook: velocity is the trending signal.
+// RSS: freshness × relevance since there's no engagement data.
+function computeExecutorScore(card) {
+  const ai = card.ai_relevance_score || 5
+  if (card.source_type === 'facebook') {
+    // velocity dominates; AI relevance breaks ties
+    const velocityScore = Math.min((card.velocity || 0) / 50, 4) * 70  // 0–280, caps at 50+/hr
+    const aiBonus = (ai / 10) * 30  // 0–30
+    return velocityScore + aiBonus
+  } else {
+    // RSS: score by freshness (decays over 48hr) + AI relevance
+    const hoursOld = Math.max(0, (Date.now() - new Date(card.created_at).getTime()) / 3600000)
+    const freshnessScore = Math.max(0, 1 - hoursOld / 48) * 60  // 0–60
+    const aiBonus = (ai / 10) * 40  // 0–40
+    return freshnessScore + aiBonus
+  }
+}
+
 function ScanGroup({ group, onArchive, onGenerate, generating, localGenerated }) {
   const [othersOpen, setOthersOpen] = useState(false)
   return (
@@ -245,7 +264,7 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
   )
 }
 
-function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerated }) {
+function ExecutorCard({ card, rank, onMarkPosted, onGenerate, generating, localGenerated }) {
   const [pasteContent, setPasteContent] = useState('')
   const headline = localGenerated?.headline ?? card.generated_headline
   const caption = localGenerated?.caption ?? card.generated_caption
@@ -256,6 +275,11 @@ function ExecutorCard({ card, onMarkPosted, onGenerate, generating, localGenerat
     <div className="bg-gray-900 rounded-2xl border border-gray-700 hover:border-gray-600 transition-all">
       {/* Hero stats bar */}
       <div className="flex items-center gap-4 px-4 pt-4 pb-3 border-b border-gray-800">
+        {rank != null && (
+          <div className="shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+            <span className="text-xs font-black text-indigo-300">#{rank}</span>
+          </div>
+        )}
         {isFacebook ? (
           <>
             <div>
@@ -730,35 +754,28 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
 
               {/* ─── Executor Tab ─── */}
               {tab === 'executor' && (() => {
-                const unposted = cards.filter(c => !c.is_posted)
-                const fbCards = unposted
-                  .filter(c => c.source_type === 'facebook')
-                  .sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
-                  .slice(0, 10)
-                const rssCards = unposted
-                  .filter(c => c.source_type === 'rss')
-                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                  .slice(0, 10)
-
-                const ExecutorSection = ({ label, sublabel, cards: sectionCards, accent }) => (
-                  <div className="mb-10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="shrink-0">
-                        <p className={`text-sm font-bold ${accent}`}>{label}</p>
-                        <p className="text-xs text-gray-500">{sublabel}</p>
-                      </div>
-                      <div className="flex-1 h-px bg-gray-800" />
+                const top5 = cards
+                  .filter(c => !c.is_posted)
+                  .map(c => ({ ...c, _score: computeExecutorScore(c) }))
+                  .sort((a, b) => b._score - a._score)
+                  .slice(0, 5)
+                return (
+                  <div className="p-5 max-w-3xl">
+                    <div className="flex items-center gap-3 mb-6">
+                      <p className="text-sm font-bold text-white">Today's Top 5</p>
+                      <p className="text-xs text-gray-500">Best content across all sources — ranked by velocity, freshness &amp; relevance</p>
                     </div>
-                    {sectionCards.length === 0 ? (
-                      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center">
-                        <p className="text-gray-500 text-sm">No results yet. Run a scan first.</p>
+                    {top5.length === 0 ? (
+                      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-10 text-center">
+                        <p className="text-gray-500 text-sm">No cards yet. Run a scan first.</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {sectionCards.map(card => (
+                        {top5.map((card, i) => (
                           <ExecutorCard
                             key={card.id}
                             card={card}
+                            rank={i + 1}
                             onMarkPosted={markPosted}
                             onGenerate={generateContent}
                             generating={generating[card.id]}
@@ -767,23 +784,6 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
                         ))}
                       </div>
                     )}
-                  </div>
-                )
-
-                return (
-                  <div className="p-5 max-w-3xl">
-                    <ExecutorSection
-                      label="📘 Trending on Facebook"
-                      sublabel="Sorted by velocity — highest interactions/hr first"
-                      cards={fbCards}
-                      accent="text-blue-300"
-                    />
-                    <ExecutorSection
-                      label="📰 Breaking News (RSS)"
-                      sublabel="Sorted by recency — newest first"
-                      cards={rssCards}
-                      accent="text-gray-300"
-                    />
                   </div>
                 )
               })()}
