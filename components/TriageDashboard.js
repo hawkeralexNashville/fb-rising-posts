@@ -53,6 +53,7 @@ function CopyButton({ text }) {
 
 function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generating, localGenerated, isArchived }) {
   const [expanded, setExpanded] = useState(false)
+  const [pasteContent, setPasteContent] = useState('')
 
   const headline = localGenerated?.headline ?? card.generated_headline
   const caption = localGenerated?.caption ?? card.generated_caption
@@ -61,9 +62,6 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
   useEffect(() => {
     if (localGenerated?.headline || localGenerated?.caption) setExpanded(true)
   }, [localGenerated?.headline, localGenerated?.caption])
-
-  const isGeneratingHeadline = generating === 'headline'
-  const isGeneratingCaption = generating === 'caption'
 
   return (
     <div className={`bg-gray-900 rounded-2xl border transition-all ${card.is_top_five && !isArchived ? 'border-indigo-500/50 ring-1 ring-indigo-500/20 shadow-lg shadow-indigo-500/5' : 'border-gray-700 hover:border-gray-600'}`}>
@@ -144,28 +142,25 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
         </div>
       )}
 
-      {/* Actions */}
-      <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
-        {!isArchived ? (
-          <>
+      {/* Generate area — only on active cards */}
+      {!isArchived && (
+        <div className="mx-4 mb-3 space-y-2">
+          <textarea
+            value={pasteContent}
+            onChange={e => setPasteContent(e.target.value)}
+            rows={3}
+            placeholder="Paste article or post content here…"
+            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-400 resize-y"
+          />
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => onGenerate(card.id, 'headline')}
-              disabled={isGeneratingHeadline || isGeneratingCaption}
+              onClick={() => onGenerate(card.id, pasteContent)}
+              disabled={!!generating}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
             >
-              {isGeneratingHeadline
+              {generating
                 ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
-                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {headline ? 'Redo Headline' : 'Headline'}</>
-              }
-            </button>
-            <button
-              onClick={() => onGenerate(card.id, 'caption')}
-              disabled={isGeneratingHeadline || isGeneratingCaption}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-            >
-              {isGeneratingCaption
-                ? <><span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" /> Generating…</>
-                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="17" y1="10" x2="3" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="21" y1="14" x2="3" y2="14" /><line x1="17" y1="18" x2="3" y2="18" /></svg> {caption ? 'Redo Caption' : 'Caption'}</>
+                : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> {hasGenerated ? 'Regenerate Headline & Caption' : 'Generate Headline & Caption'}</>
               }
             </button>
             <button
@@ -175,26 +170,29 @@ function TriageCard({ card, onArchive, onRestore, onDelete, onGenerate, generati
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
               Archive
             </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => onRestore(card.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.08" /></svg>
-              Restore
-            </button>
-            <button
-              onClick={() => onDelete(card.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors ml-auto"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-              Delete
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* Actions — archived cards only */}
+      {isArchived && (
+        <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onRestore(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.08" /></svg>
+            Restore
+          </button>
+          <button
+            onClick={() => onDelete(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors ml-auto"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -353,23 +351,22 @@ export default function TriageDashboard({ supabase, session, onOpenSetup }) {
     showToast('Card deleted')
   }
 
-  async function generateContent(cardId, type) {
-    setGenerating(prev => ({ ...prev, [cardId]: type }))
+  async function generateContent(cardId, sourceContent) {
+    setGenerating(prev => ({ ...prev, [cardId]: true }))
     const token = await getToken()
     try {
       const res = await fetch('/api/triage/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cardId, type }),
+        body: JSON.stringify({ cardId, type: 'both', sourceContent }),
       })
       const data = await res.json()
-      if (res.ok && data.text) {
+      if (res.ok && (data.headline || data.caption)) {
         setLocalGenerated(prev => ({
           ...prev,
-          [cardId]: { ...prev[cardId], [type]: data.text },
+          [cardId]: { headline: data.headline, caption: data.caption },
         }))
-        // Update card in list
-        const updater = c => c.id === cardId ? { ...c, [type === 'headline' ? 'generated_headline' : 'generated_caption']: data.text } : c
+        const updater = c => c.id === cardId ? { ...c, generated_headline: data.headline, generated_caption: data.caption } : c
         setCards(prev => prev.map(updater))
         setArchivedCards(prev => prev.map(updater))
       } else {
