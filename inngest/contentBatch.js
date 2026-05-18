@@ -182,7 +182,6 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
   }
   throw new Error('Kie.ai image generation timed out')
 }
-}
 
 // ─── Watermark composite ───
 async function applyWatermark(imageBuffer, logoBuffer, position = 'bottom-right') {
