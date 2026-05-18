@@ -161,8 +161,9 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
     const err = await createRes.text()
     throw new Error(`Kie.ai createTask failed: ${err.slice(0, 200)}`)
   }
-  const { taskId } = await createRes.json()
-  if (!taskId) throw new Error('Kie.ai: no taskId returned')
+  const createData = await createRes.json()
+  const taskId = createData.taskId || createData.task_id || createData.id || createData.data?.taskId || createData.data?.task_id || createData.data?.id
+  if (!taskId) throw new Error(`Kie.ai: no taskId in response: ${JSON.stringify(createData).slice(0, 300)}`)
 
   // Poll for completion (max 3 minutes)
   for (let attempt = 0; attempt < 36; attempt++) {
@@ -172,13 +173,15 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
     })
     if (!statusRes.ok) continue
     const statusData = await statusRes.json()
-    const status = statusData.status || statusData.data?.status
-    if (status === 'COMPLETED' || status === 'SUCCESS') {
+    const status = statusData.status || statusData.data?.status || statusData.data?.taskStatus
+    if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'succeed') {
       const imageUrl = statusData.imageUrl || statusData.data?.imageUrl || statusData.output?.imageUrl
+        || statusData.data?.resultUrl || statusData.data?.imageUrls?.[0] || statusData.data?.output?.imageUrl
       if (imageUrl) return imageUrl
+      throw new Error(`Kie.ai: completed but no imageUrl in response: ${JSON.stringify(statusData).slice(0, 300)}`)
     }
-    if (status === 'FAILED' || status === 'ERROR') {
-      throw new Error(`Kie.ai image generation failed: ${statusData.error || status}`)
+    if (status === 'FAILED' || status === 'ERROR' || status === 'failed') {
+      throw new Error(`Kie.ai image generation failed: ${JSON.stringify(statusData).slice(0, 300)}`)
     }
   }
   throw new Error('Kie.ai image generation timed out')
