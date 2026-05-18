@@ -278,6 +278,8 @@ export const runContentBatch = inngest.createFunction(
     const { batchId, pageId, userId, timeWindowHours = 24 } = event.data
     const db = svc()
 
+    try {
+
     await step.run('init', async () => {
       await updateBatch(db, batchId, { status: 'running' })
       await setProgress(db, batchId, 'init', 2, 'Starting batch...')
@@ -289,24 +291,27 @@ export const runContentBatch = inngest.createFunction(
       if (!pageData) throw new Error('Content page not found')
 
       const { data: settingsData } = await db.from('user_settings').select('apify_key_enc, anthropic_key_enc, kie_key_enc').eq('user_id', userId).single()
-      if (!settingsData) throw new Error('User API keys not configured')
+      if (!settingsData) throw new Error('User API keys not configured — go to API Keys and save your keys')
 
       const apifyKey = settingsData.apify_key_enc ? decrypt(settingsData.apify_key_enc) : null
       const anthropicKey = settingsData.anthropic_key_enc ? decrypt(settingsData.anthropic_key_enc) : null
       const kieKey = settingsData.kie_key_enc ? decrypt(settingsData.kie_key_enc) : null
 
-      if (!apifyKey) throw new Error('Apify key not configured')
-      if (!anthropicKey) throw new Error('Anthropic key not configured')
+      if (!apifyKey) throw new Error('Apify key not configured — go to API Keys and add your Apify key')
+      if (!anthropicKey) throw new Error('Anthropic key not configured — go to API Keys and add your Anthropic key')
 
-      return { page: pageData, keys: { apifyKey, anthropicKey, kieKey } }
+      const competitorUrls = pageData.competitor_urls?.filter(Boolean) || []
+      if (competitorUrls.length === 0) throw new Error('No competitor URLs configured — edit this page and add at least one Facebook page URL')
+
+      return { page: { ...pageData, competitor_urls: competitorUrls }, keys: { apifyKey, anthropicKey, kieKey } }
     })
 
     if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
 
     // Scrape competitor posts
     const scrapedPosts = await step.run('scrape', async () => {
-      await setProgress(db, batchId, 'scrape', 10, `Scraping competitor pages (last ${timeWindowHours}h)...`)
-      const { posts: raw, costUsd } = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls || [], timeWindowHours)
+      await setProgress(db, batchId, 'scrape', 10, `Scraping ${page.competitor_urls.length} competitor page(s) (last ${timeWindowHours}h)...`)
+      const { posts: raw, costUsd } = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls, timeWindowHours)
       // Store scrape cost immediately
       await updateBatch(db, batchId, { scrape_cost_usd: costUsd })
       // Score and sort, take top 10
@@ -429,5 +434,15 @@ export const runContentBatch = inngest.createFunction(
     })
 
     return { batchId, postCount: processedPosts.length }
+
+    } catch (err) {
+      // Write the error back to the batch so the UI can show it
+      await db.from('content_batches').update({
+        status: 'error',
+        progress_message: err.message,
+        updated_at: new Date().toISOString(),
+      }).eq('id', batchId)
+      throw err
+    }
   }
 )
