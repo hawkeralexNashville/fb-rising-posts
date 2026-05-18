@@ -2,9 +2,8 @@ import { inngest } from './client'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '../lib/content/encryption'
 import sharp from 'sharp'
-import { ZipArchive } from 'archiver'
+import archiver from 'archiver'
 import * as XLSX from 'xlsx'
-import { Readable } from 'stream'
 
 function svc() {
   return createClient(
@@ -216,7 +215,7 @@ async function uploadToStorage(db, buffer, path, contentType = 'image/jpeg') {
 async function buildBatchZip(db, batchId, posts, pageId, userId) {
   return new Promise(async (resolve, reject) => {
     const chunks = []
-    const archive = new ZipArchive({ zlib: { level: 9 } })
+    const archive = archiver('zip', { zlib: { level: 9 } })
 
     archive.on('data', chunk => chunks.push(chunk))
     archive.on('error', reject)
