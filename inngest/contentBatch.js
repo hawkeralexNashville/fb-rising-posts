@@ -145,46 +145,43 @@ Return ONLY a JSON array of ${count} strings. No markdown, no explanation.`
 
 // ─── Kie.ai image generation ───
 async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
-  const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  const createRes = await fetch('https://api.kie.ai/api/v1/flux/kontext/generate', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${kieKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'flux-2/pro-text-to-image',
+      model: 'flux-kontext-pro',
       prompt,
       aspectRatio,
     }),
   })
-  if (!createRes.ok) {
-    const err = await createRes.text()
-    throw new Error(`Kie.ai createTask failed: ${err.slice(0, 200)}`)
-  }
   const createData = await createRes.json()
-  const taskId = createData.taskId || createData.task_id || createData.id || createData.data?.taskId || createData.data?.task_id || createData.data?.id
+  if (createData.code !== 200) throw new Error(`Kie.ai error: ${createData.msg || JSON.stringify(createData).slice(0, 200)}`)
+  const taskId = createData.data?.taskId
   if (!taskId) throw new Error(`Kie.ai: no taskId in response: ${JSON.stringify(createData).slice(0, 300)}`)
 
-  // Poll for completion (max 3 minutes)
+  // Poll for completion (max 3 minutes) — successFlag: 0=generating, 1=success, 2/3=failed
   for (let attempt = 0; attempt < 36; attempt++) {
     await new Promise(r => setTimeout(r, 5000))
-    const statusRes = await fetch(`https://api.kie.ai/api/v1/jobs/taskStatus/${taskId}`, {
+    const statusRes = await fetch(`https://api.kie.ai/api/v1/flux/kontext/record-info?taskId=${taskId}`, {
       headers: { 'Authorization': `Bearer ${kieKey}` },
     })
     if (!statusRes.ok) continue
     const statusData = await statusRes.json()
-    const status = statusData.status || statusData.data?.status || statusData.data?.taskStatus
-    if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'succeed') {
-      const imageUrl = statusData.imageUrl || statusData.data?.imageUrl || statusData.output?.imageUrl
-        || statusData.data?.resultUrl || statusData.data?.imageUrls?.[0] || statusData.data?.output?.imageUrl
+    const flag = statusData.data?.successFlag
+    if (flag === 1) {
+      const imageUrl = statusData.data?.resultImageUrl || statusData.data?.originImageUrl
       if (imageUrl) return imageUrl
-      throw new Error(`Kie.ai: completed but no imageUrl in response: ${JSON.stringify(statusData).slice(0, 300)}`)
+      throw new Error(`Kie.ai: succeeded but no image URL in response`)
     }
-    if (status === 'FAILED' || status === 'ERROR' || status === 'failed') {
-      throw new Error(`Kie.ai image generation failed: ${JSON.stringify(statusData).slice(0, 300)}`)
+    if (flag === 2 || flag === 3) {
+      throw new Error(`Kie.ai generation failed: ${JSON.stringify(statusData).slice(0, 200)}`)
     }
   }
   throw new Error('Kie.ai image generation timed out')
+}
 }
 
 // ─── Watermark composite ───
@@ -396,7 +393,7 @@ export const runContentBatch = inngest.createFunction(
             await updatePost(db, postId, { image_storage_path: storagePath, status: 'image_done' })
             postResult.image_storage_path = storagePath
           } catch (err) {
-            await updatePost(db, postId, { error_message: (await db.from('content_posts').select('error_message').eq('id', postId).single())?.data?.error_message + ` | Image error: ${err.message}` })
+            await updatePost(db, postId, { error_message: `Image error: ${err.message}` })
           }
         }
 
