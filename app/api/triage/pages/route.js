@@ -27,10 +27,12 @@ export async function GET(request) {
 
   const db = svc()
 
-  const [{ data: ownedPages, error }, { data: collabPages }] = await Promise.all([
+  const [{ data: ownedPages, error }, collabResult] = await Promise.all([
     db.from('triage_pages').select('*').eq('user_id', user.id).order('created_at'),
     db.from('triage_pages').select('id, name').ilike('collaborator_email', user.email || '').order('created_at'),
   ])
+  // collabResult may error if collaborator_email column doesn't exist yet — that's fine
+  const collabPages = collabResult.error ? [] : (collabResult.data || [])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Owned pages — full data with keywords and example posts

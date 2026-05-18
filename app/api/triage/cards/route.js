@@ -35,11 +35,16 @@ export async function GET(request) {
 
   const db = svc()
 
-  const { data: page } = await db.from('triage_pages').select('id, user_id, collaborator_email').eq('id', triagePageId).single()
-  if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 })
-  const isOwner = page.user_id === user.id
-  const isCollab = page.collaborator_email?.toLowerCase() === user.email?.toLowerCase()
-  if (!isOwner && !isCollab) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const { data: page, error: pageErr } = await db.from('triage_pages').select('id, user_id, collaborator_email').eq('id', triagePageId).single()
+  if (pageErr || !page) {
+    // Column may not exist yet — fall back to owner-only check
+    const { data: ownedPage } = await db.from('triage_pages').select('id').eq('id', triagePageId).eq('user_id', user.id).single()
+    if (!ownedPage) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  } else {
+    const isOwner = page.user_id === user.id
+    const isCollab = page.collaborator_email?.toLowerCase() === user.email?.toLowerCase()
+    if (!isOwner && !isCollab) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
 
   const { data: cards, error } = await db
     .from('triage_cards')
@@ -69,10 +74,14 @@ export async function PATCH(request) {
   const { data: card } = await db.from('triage_cards').select('id, triage_page_id').eq('id', id).single()
   if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 })
 
-  const { data: page } = await db.from('triage_pages').select('id, user_id, collaborator_email').eq('id', card.triage_page_id).single()
-  if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 })
-  const canWrite = page.user_id === user.id || page.collaborator_email?.toLowerCase() === user.email?.toLowerCase()
-  if (!canWrite) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const { data: page, error: pageErr } = await db.from('triage_pages').select('id, user_id, collaborator_email').eq('id', card.triage_page_id).single()
+  if (pageErr || !page) {
+    const { data: ownedPage } = await db.from('triage_pages').select('id').eq('id', card.triage_page_id).eq('user_id', user.id).single()
+    if (!ownedPage) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  } else {
+    const canWrite = page.user_id === user.id || page.collaborator_email?.toLowerCase() === user.email?.toLowerCase()
+    if (!canWrite) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
 
   const allowed = ['is_archived', 'is_posted', 'generated_headline', 'generated_caption', 'is_top_five']
   const update = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)))
