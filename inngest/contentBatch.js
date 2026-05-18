@@ -172,9 +172,11 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
     const statusData = await statusRes.json()
     const flag = statusData.data?.successFlag
     if (flag === 1) {
-      const imageUrl = statusData.data?.resultImageUrl || statusData.data?.originImageUrl
+      const d = statusData.data || {}
+      const imageUrl = d.resultImageUrl || d.originImageUrl || d.imageUrl || d.url
+        || d.images?.[0] || d.output?.imageUrl || d.output?.url
       if (imageUrl) return imageUrl
-      throw new Error(`Kie.ai: succeeded but no image URL in response`)
+      throw new Error(`Kie.ai: succeeded but no image URL. Response: ${JSON.stringify(statusData).slice(0, 400)}`)
     }
     if (flag === 2 || flag === 3) {
       throw new Error(`Kie.ai generation failed: ${JSON.stringify(statusData).slice(0, 200)}`)
@@ -353,13 +355,15 @@ export const runContentBatch = inngest.createFunction(
       if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
 
       const pct = 30 + Math.round((i / scrapedPosts.length) * 55)
-      await setProgress(db, batchId, 'generate', pct, `Processing post ${i + 1} of ${scrapedPosts.length}...`)
+      const postLabel = `Post ${i + 1}/${scrapedPosts.length}`
+      await setProgress(db, batchId, 'generate', pct, `${postLabel}: generating captions...`)
 
       const result = await step.run(`process-post-${i}`, async () => {
         const postResult = { id: postId, source_url: post.url || post.postUrl, engagement_score: post._engagementScore }
 
         // Generate captions
         try {
+          await setProgress(db, batchId, 'generate', pct, `${postLabel}: generating captions...`)
           const captions = await generateCaptions(keys.anthropicKey, post, page)
           await updatePost(db, postId, { captions, status: 'captions_done' })
           postResult.captions = captions
@@ -371,6 +375,7 @@ export const runContentBatch = inngest.createFunction(
         // Generate image with Kie.ai (optional — skip if no key)
         if (keys.kieKey) {
           try {
+            await setProgress(db, batchId, 'generate', pct, `${postLabel}: generating image (this takes ~30s)...`)
             const imagePrompt = `${page.image_style_prompt || 'Professional social media graphic, modern design'}, inspired by: ${(post.text || '').slice(0, 200)}`
             const kieImageUrl = await generateImage(keys.kieKey, imagePrompt, page.image_aspect_ratio || '1:1')
 
@@ -391,8 +396,10 @@ export const runContentBatch = inngest.createFunction(
 
             await updatePost(db, postId, { image_storage_path: storagePath, status: 'image_done' })
             postResult.image_storage_path = storagePath
+            await setProgress(db, batchId, 'generate', pct, `${postLabel}: image done ✓`)
           } catch (err) {
             await updatePost(db, postId, { error_message: `Image error: ${err.message}` })
+            await setProgress(db, batchId, 'generate', pct, `${postLabel}: image failed — ${err.message.slice(0, 80)}`)
           }
         }
 
