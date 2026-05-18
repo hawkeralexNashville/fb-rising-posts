@@ -2,7 +2,8 @@ import { inngest } from './client'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '../lib/content/encryption'
 import sharp from 'sharp'
-import archiver from 'archiver'
+import { createRequire } from 'module'
+const archiver = createRequire(import.meta.url)('archiver')
 import * as XLSX from 'xlsx'
 
 function svc() {
