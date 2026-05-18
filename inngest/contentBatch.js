@@ -31,24 +31,58 @@ async function setProgress(db, batchId, step, pct, message) {
   }).eq('id', batchId)
 }
 
-// ─── Apify scrape ───
-async function scrapeCompetitorPosts(apifyKey, pageUrls, limit = 20) {
-  const url = `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items?token=${apifyKey}&timeout=120`
-  const body = {
-    startUrls: pageUrls.map(u => ({ url: u })),
-    resultsLimit: limit,
-    scrapeComments: false,
-  }
-  const res = await fetch(url, {
+// ─── Apify scrape (async so we can retrieve cost) ───
+async function scrapeCompetitorPosts(apifyKey, pageUrls, timeWindowHours = 24, limit = 30) {
+  // Start async run
+  const startRes = await fetch(`https://api.apify.com/v2/acts/apify~facebook-posts-scraper/runs?token=${apifyKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      startUrls: pageUrls.map(u => ({ url: u })),
+      resultsLimit: limit,
+      scrapeComments: false,
+    }),
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Apify scrape failed: ${err.slice(0, 200)}`)
+  if (!startRes.ok) {
+    const err = await startRes.text()
+    throw new Error(`Apify start failed: ${err.slice(0, 200)}`)
   }
-  return res.json()
+  const { data: runData } = await startRes.json()
+  const runId = runData?.id
+  if (!runId) throw new Error('Apify: no runId returned')
+
+  // Poll until finished (max 5 minutes)
+  let status = 'RUNNING'
+  let finalRunData = null
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5000))
+    const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apifyKey}`)
+    const statusData = await statusRes.json()
+    status = statusData.data?.status
+    if (status === 'SUCCEEDED') { finalRunData = statusData.data; break }
+    if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+      throw new Error(`Apify run ${status.toLowerCase()}`)
+    }
+  }
+  if (!finalRunData) throw new Error('Apify scrape timed out')
+
+  const costUsd = finalRunData.usageTotalUsd ?? 0
+  const datasetId = finalRunData.defaultDatasetId
+  if (!datasetId) throw new Error('Apify: no dataset found')
+
+  const dataRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${apifyKey}&limit=500`)
+  if (!dataRes.ok) throw new Error('Apify: failed to fetch dataset items')
+  const items = await dataRes.json()
+
+  // Filter by time window
+  const cutoff = Date.now() - timeWindowHours * 60 * 60 * 1000
+  const filtered = items.filter(p => {
+    const posted = p.timestamp || p.postedAt || p.date
+    if (!posted) return true // keep if no date info
+    return new Date(posted).getTime() >= cutoff
+  })
+
+  return { posts: filtered, costUsd }
 }
 
 // ─── Engagement score ───
@@ -235,7 +269,7 @@ async function buildBatchZip(db, batchId, posts, pageId, userId) {
 export const runContentBatch = inngest.createFunction(
   { id: 'run-content-batch', retries: 0, triggers: [{ event: 'content/batch.run' }] },
   async ({ event, step }) => {
-    const { batchId, pageId, userId } = event.data
+    const { batchId, pageId, userId, timeWindowHours = 24 } = event.data
     const db = svc()
 
     await step.run('init', async () => {
@@ -263,13 +297,15 @@ export const runContentBatch = inngest.createFunction(
 
     // Scrape competitor posts
     const scrapedPosts = await step.run('scrape', async () => {
-      await setProgress(db, batchId, 'scrape', 10, 'Scraping competitor pages...')
-      const raw = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls || [], 30)
-      // Score and sort
+      await setProgress(db, batchId, 'scrape', 10, `Scraping competitor pages (last ${timeWindowHours}h)...`)
+      const { posts: raw, costUsd } = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls || [], timeWindowHours)
+      // Store scrape cost immediately
+      await updateBatch(db, batchId, { scrape_cost_usd: costUsd })
+      // Score and sort, take top 10
       const scored = raw.map(p => ({ ...p, _engagementScore: engagementScore(p) }))
         .sort((a, b) => b._engagementScore - a._engagementScore)
-        .slice(0, 10) // top 10
-      await setProgress(db, batchId, 'scrape', 25, `Scraped ${raw.length} posts, selected top ${scored.length}`)
+        .slice(0, 10)
+      await setProgress(db, batchId, 'scrape', 25, `Scraped ${raw.length} posts in last ${timeWindowHours}h · cost $${costUsd.toFixed(4)} · selected top ${scored.length}`)
       return scored
     })
 
@@ -365,13 +401,15 @@ export const runContentBatch = inngest.createFunction(
       await updateBatch(db, batchId, { zip_storage_path: zipPath })
     })
 
-    // Finalize
+    // Finalize — read final cost from DB then summarise
     await step.run('finalize', async () => {
+      const { data: batchRow } = await db.from('content_batches').select('scrape_cost_usd').eq('id', batchId).single()
+      const totalCost = batchRow?.scrape_cost_usd ?? 0
       await updateBatch(db, batchId, {
         status: 'done',
         progress_step: 'done',
         progress_pct: 100,
-        progress_message: `Batch complete — ${processedPosts.length} posts processed`,
+        progress_message: `Batch complete — ${processedPosts.length} posts · Apify cost $${totalCost.toFixed(4)}`,
         completed_at: new Date().toISOString(),
       })
     })

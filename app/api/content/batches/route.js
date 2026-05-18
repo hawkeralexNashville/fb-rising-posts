@@ -43,7 +43,7 @@ export async function POST(request) {
   const user = await getUser(request)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { pageId } = await request.json()
+  const { pageId, timeWindowHours = 24 } = await request.json()
   if (!pageId) return NextResponse.json({ error: 'Missing pageId' }, { status: 400 })
 
   const db = svc()
@@ -58,6 +58,7 @@ export async function POST(request) {
     progress_step: 'queued',
     progress_pct: 0,
     progress_message: 'Queued...',
+    time_window_hours: timeWindowHours,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -71,7 +72,7 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'content/batch.run',
-          data: { batchId: batch.id, pageId, userId: user.id },
+          data: { batchId: batch.id, pageId, userId: user.id, timeWindowHours },
         }),
       })
     } catch (err) {

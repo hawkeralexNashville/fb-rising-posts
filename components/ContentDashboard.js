@@ -571,6 +571,7 @@ export default function ContentDashboard({ supabase, session }) {
   const [runningBatch, setRunningBatch] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('batches') // batches | settings | keys
+  const [timeWindowHours, setTimeWindowHours] = useState(24)
 
   useEffect(() => {
     loadPages()
@@ -604,7 +605,7 @@ export default function ContentDashboard({ supabase, session }) {
     if (!selectedPage) return
     setRunningBatch(true); setError(null)
     try {
-      const batch = await apiFetch('/api/content/batches', 'POST', { pageId: selectedPage.id }, session)
+      const batch = await apiFetch('/api/content/batches', 'POST', { pageId: selectedPage.id, timeWindowHours }, session)
       setBatches(prev => [batch, ...prev])
       setSelectedBatch(batch)
     } catch (err) { setError(err.message) }
@@ -702,11 +703,19 @@ export default function ContentDashboard({ supabase, session }) {
                 <h2 className="text-2xl font-bold text-white">{selectedPage.name}</h2>
                 <p className="text-sm text-gray-500 mt-1 capitalize">{selectedPage.tone} · {selectedPage.competitor_urls?.length || 0} competitors · {selectedPage.image_aspect_ratio}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button onClick={() => { setEditingPage(selectedPage); setShowWizard(true) }}
                   className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 text-sm rounded-xl transition-colors">
                   {Icons.settings} Edit
                 </button>
+                <select value={timeWindowHours} onChange={e => setTimeWindowHours(Number(e.target.value))}
+                  className="px-3 py-2 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-xl focus:outline-none focus:border-purple-400">
+                  <option value={6}>Last 6h</option>
+                  <option value={12}>Last 12h</option>
+                  <option value={24}>Last 24h</option>
+                  <option value={48}>Last 48h</option>
+                  <option value={72}>Last 72h</option>
+                </select>
                 <button onClick={startBatch} disabled={runningBatch}
                   className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
                   {runningBatch ? Icons.spinner : Icons.play}
@@ -733,6 +742,8 @@ export default function ContentDashboard({ supabase, session }) {
                         <span className={`w-2 h-2 rounded-full ${b.status === 'done' ? 'bg-emerald-500' : b.status === 'error' ? 'bg-red-500' : 'bg-purple-500 animate-pulse'}`} />
                         <span className="text-sm font-semibold text-white capitalize">{b.status}</span>
                         <span className="text-xs text-gray-500">{timeAgo(b.created_at)}</span>
+                        {b.time_window_hours && <span className="text-xs text-gray-600">· {b.time_window_hours}h window</span>}
+                        {b.scrape_cost_usd != null && <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">${Number(b.scrape_cost_usd).toFixed(4)}</span>}
                       </div>
                       <span className="text-xs text-gray-600 group-hover:text-purple-400 transition-colors">View →</span>
                     </div>
