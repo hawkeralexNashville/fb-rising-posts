@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { inngest } from '../../../inngest/client'
+import { inngest } from '../../../../inngest/client'
 
 function svc() {
   return createClient(

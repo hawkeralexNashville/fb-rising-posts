@@ -2,8 +2,7 @@ import { inngest } from './client'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '../lib/content/encryption'
 import sharp from 'sharp'
-import { createRequire } from 'module'
-const archiver = createRequire(import.meta.url)('archiver')
+import AdmZip from 'adm-zip'
 import * as XLSX from 'xlsx'
 
 function svc() {
@@ -214,55 +213,42 @@ async function uploadToStorage(db, buffer, path, contentType = 'image/jpeg') {
 
 // ─── Build ZIP + XLSX ───
 async function buildBatchZip(db, batchId, posts, pageId, userId) {
-  return new Promise(async (resolve, reject) => {
-    const chunks = []
-    const archive = archiver('zip', { zlib: { level: 9 } })
+  const zip = new AdmZip()
 
-    archive.on('data', chunk => chunks.push(chunk))
-    archive.on('error', reject)
-    archive.on('end', async () => {
-      try {
-        const zipBuffer = Buffer.concat(chunks)
-        const zipPath = `users/${userId}/pages/${pageId}/batches/${batchId}/batch-${batchId}.zip`
-        await uploadToStorage(db, zipBuffer, zipPath, 'application/zip')
-        resolve(zipPath)
-      } catch (err) {
-        reject(err)
+  // XLSX sheet
+  const rows = posts.map((p, i) => ({
+    '#': i + 1,
+    'Source URL': p.source_url || '',
+    'Engagement Score': p.engagement_score || 0,
+    'Caption 1': p.captions?.[0] || '',
+    'Caption 2': p.captions?.[1] || '',
+    'Caption 3': p.captions?.[2] || '',
+    'Caption 4': p.captions?.[3] || '',
+    'Image File': p.image_storage_path ? `images/${p.image_storage_path.split('/').pop()}` : '',
+  }))
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.json_to_sheet(rows)
+  XLSX.utils.book_append_sheet(wb, ws, 'Posts')
+  const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+  zip.addFile('posts.xlsx', xlsxBuffer)
+
+  // Download + include images
+  for (const post of posts) {
+    if (!post.image_storage_path) continue
+    try {
+      const { data } = await db.storage.from('content-generated').download(post.image_storage_path)
+      if (data) {
+        const imgBuf = Buffer.from(await data.arrayBuffer())
+        const filename = post.image_storage_path.split('/').pop()
+        zip.addFile(`images/${filename}`, imgBuf)
       }
-    })
+    } catch {}
+  }
 
-    // XLSX sheet
-    const rows = posts.map((p, i) => ({
-      '#': i + 1,
-      'Source URL': p.source_url || '',
-      'Engagement Score': p.engagement_score || 0,
-      'Caption 1': p.captions?.[0] || '',
-      'Caption 2': p.captions?.[1] || '',
-      'Caption 3': p.captions?.[2] || '',
-      'Caption 4': p.captions?.[3] || '',
-      'Image File': p.image_storage_path ? `images/${p.image_storage_path.split('/').pop()}` : '',
-    }))
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.json_to_sheet(rows)
-    XLSX.utils.book_append_sheet(wb, ws, 'Posts')
-    const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-    archive.append(xlsxBuffer, { name: 'posts.xlsx' })
-
-    // Download + include images
-    for (const post of posts) {
-      if (!post.image_storage_path) continue
-      try {
-        const { data } = await db.storage.from('content-generated').download(post.image_storage_path)
-        if (data) {
-          const imgBuf = Buffer.from(await data.arrayBuffer())
-          const filename = post.image_storage_path.split('/').pop()
-          archive.append(imgBuf, { name: `images/${filename}` })
-        }
-      } catch {}
-    }
-
-    archive.finalize()
-  })
+  const zipBuffer = zip.toBuffer()
+  const zipPath = `users/${userId}/pages/${pageId}/batches/${batchId}/batch-${batchId}.zip`
+  await uploadToStorage(db, zipBuffer, zipPath, 'application/zip')
+  return zipPath
 }
 
 // ─── Cancellation check ───

@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['archiver', 'sharp'],
+  serverExternalPackages: ['sharp'],
 }
 export default nextConfig
