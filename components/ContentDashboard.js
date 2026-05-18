@@ -385,8 +385,11 @@ function PostCard({ post, onUpdate }) {
           )}
         </div>
       ) : (
-        <div className="bg-gray-800 aspect-square flex items-center justify-center">
+        <div className="bg-gray-800 aspect-square flex flex-col items-center justify-center gap-2 p-3">
           <span className="text-gray-600">{Icons.image}</span>
+          {post.error_message && (
+            <p className="text-xs text-red-400 text-center leading-snug">{post.error_message}</p>
+          )}
         </div>
       )}
 
