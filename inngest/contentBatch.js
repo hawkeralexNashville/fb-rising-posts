@@ -173,8 +173,8 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
     const flag = statusData.data?.successFlag ?? statusData.successFlag
     if (flag === 1 || flag === '1') {
       const d = statusData.data || {}
-      const imageUrl = d.resultImageUrl || d.originImageUrl || d.imageUrl || d.url
-        || d.images?.[0] || d.output?.imageUrl || d.output?.url
+      const imageUrl = d.response?.resultImageUrl || d.response?.originImageUrl
+        || d.resultImageUrl || d.originImageUrl || d.imageUrl || d.url
       if (imageUrl) return imageUrl
       // Dump all keys to find the right field
       throw new Error(`Kie.ai: succeeded but no image URL. Keys: ${JSON.stringify(Object.keys(d))} Full: ${JSON.stringify(statusData).slice(0, 800)}`)
