@@ -15,6 +15,7 @@ const Icons = {
   image: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
   upload: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>,
   spinner: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0110 10" strokeLinecap="round"/></svg>,
+  stop: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>,
 }
 
 function tok(session) { return session?.access_token }
@@ -332,17 +333,18 @@ function BatchProgress({ batch }) {
   const pct = batch.progress_pct || 0
   const isDone = batch.status === 'done'
   const isError = batch.status === 'error'
+  const isCancelled = batch.status === 'cancelled'
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className={isError ? 'text-red-400' : isDone ? 'text-emerald-400' : 'text-purple-400'}>
-          {isError ? '✗ Error' : isDone ? '✓ Done' : batch.progress_message || 'Processing...'}
+        <span className={isError ? 'text-red-400' : isCancelled ? 'text-gray-400' : isDone ? 'text-emerald-400' : 'text-purple-400'}>
+          {isError ? '✗ Error' : isCancelled ? '⊘ Cancelled' : isDone ? '✓ Done' : batch.progress_message || 'Processing...'}
         </span>
         <span className="text-gray-500">{pct}%</span>
       </div>
       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${isError ? 'bg-red-500' : isDone ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-all duration-500 ${isError ? 'bg-red-500' : isCancelled ? 'bg-gray-600' : isDone ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${pct}%` }} />
       </div>
       {isError && batch.error_message && <p className="text-xs text-red-400">{batch.error_message}</p>}
     </div>
@@ -455,6 +457,7 @@ function BatchView({ batch, session, supabase, onBack }) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloading, setDownloading] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [liveBatch, setLiveBatch] = useState(batch)
 
   useEffect(() => {
@@ -496,6 +499,16 @@ function BatchView({ batch, session, supabase, onBack }) {
     setDownloading(false)
   }
 
+  async function cancelBatch() {
+    setCancelling(true)
+    try {
+      const token = tok(session)
+      const res = await fetch(`/api/content/batches?batchId=${batch.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) setLiveBatch(prev => ({ ...prev, status: 'cancelled', progress_message: 'Cancelled by user' }))
+    } catch {}
+    setCancelling(false)
+  }
+
   const approvedCount = posts.filter(p => p.review_status === 'approved').length
 
   return (
@@ -508,6 +521,13 @@ function BatchView({ batch, session, supabase, onBack }) {
             <h2 className="text-xl font-bold text-white">Batch Results</h2>
             <p className="text-sm text-gray-500">{timeAgo(batch.created_at)} · {posts.length} posts</p>
           </div>
+          {(liveBatch.status === 'queued' || liveBatch.status === 'running') && (
+            <button onClick={cancelBatch} disabled={cancelling}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/60 disabled:opacity-50 text-red-400 text-sm font-semibold rounded-xl transition-colors">
+              {cancelling ? Icons.spinner : Icons.stop}
+              {cancelling ? 'Cancelling...' : 'Cancel Batch'}
+            </button>
+          )}
           {liveBatch.status === 'done' && (
             <button onClick={download} disabled={downloading}
               className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -569,6 +589,7 @@ export default function ContentDashboard({ supabase, session }) {
   const [showKeys, setShowKeys] = useState(false)
   const [loading, setLoading] = useState(true)
   const [runningBatch, setRunningBatch] = useState(false)
+  const [cancellingBatch, setCancellingBatch] = useState(null)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('batches') // batches | settings | keys
   const [timeWindowHours, setTimeWindowHours] = useState(24)
@@ -610,6 +631,16 @@ export default function ContentDashboard({ supabase, session }) {
       setSelectedBatch(batch)
     } catch (err) { setError(err.message) }
     setRunningBatch(false)
+  }
+
+  async function cancelBatch(e, batchId) {
+    e.stopPropagation()
+    setCancellingBatch(batchId)
+    try {
+      await apiFetch(`/api/content/batches?batchId=${batchId}`, 'DELETE', null, session)
+      setBatches(prev => prev.map(b => b.id === batchId ? { ...b, status: 'cancelled', progress_message: 'Cancelled by user' } : b))
+    } catch (err) { setError(err.message) }
+    setCancellingBatch(null)
   }
 
   async function deletePage(pageId) {
@@ -734,22 +765,38 @@ export default function ContentDashboard({ supabase, session }) {
               </div>
             ) : (
               <div className="space-y-3">
-                {batches.map(b => (
-                  <div key={b.id} onClick={() => setSelectedBatch(b)}
-                    className="bg-gray-900 border border-gray-700 hover:border-purple-500/50 rounded-2xl p-4 cursor-pointer transition-all group">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${b.status === 'done' ? 'bg-emerald-500' : b.status === 'error' ? 'bg-red-500' : 'bg-purple-500 animate-pulse'}`} />
-                        <span className="text-sm font-semibold text-white capitalize">{b.status}</span>
-                        <span className="text-xs text-gray-500">{timeAgo(b.created_at)}</span>
-                        {b.time_window_hours && <span className="text-xs text-gray-600">· {b.time_window_hours}h window</span>}
-                        {b.scrape_cost_usd != null && <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">${Number(b.scrape_cost_usd).toFixed(4)}</span>}
+                {batches.map(b => {
+                  const isActive = b.status === 'queued' || b.status === 'running'
+                  const isCancelling = cancellingBatch === b.id
+                  return (
+                    <div key={b.id} onClick={() => setSelectedBatch(b)}
+                      className="bg-gray-900 border border-gray-700 hover:border-purple-500/50 rounded-2xl p-4 cursor-pointer transition-all group">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${b.status === 'done' ? 'bg-emerald-500' : b.status === 'error' ? 'bg-red-500' : b.status === 'cancelled' ? 'bg-gray-500' : 'bg-purple-500 animate-pulse'}`} />
+                          <span className="text-sm font-semibold text-white capitalize">{b.status}</span>
+                          <span className="text-xs text-gray-500">{timeAgo(b.created_at)}</span>
+                          {b.time_window_hours && <span className="text-xs text-gray-600">· {b.time_window_hours}h window</span>}
+                          {b.scrape_cost_usd != null && <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">${Number(b.scrape_cost_usd).toFixed(4)}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isActive && (
+                            <button
+                              onClick={e => cancelBatch(e, b.id)}
+                              disabled={isCancelling}
+                              className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/60 text-red-400 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {isCancelling ? Icons.spinner : Icons.stop}
+                              {isCancelling ? 'Cancelling...' : 'Cancel'}
+                            </button>
+                          )}
+                          <span className="text-xs text-gray-600 group-hover:text-purple-400 transition-colors">View →</span>
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-600 group-hover:text-purple-400 transition-colors">View →</span>
+                      {isActive && <BatchProgress batch={b} />}
                     </div>
-                    {(b.status === 'running' || b.status === 'queued') && <BatchProgress batch={b} />}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
