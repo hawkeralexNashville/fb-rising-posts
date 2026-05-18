@@ -264,6 +264,12 @@ async function buildBatchZip(db, batchId, posts, pageId, userId) {
   })
 }
 
+// ─── Cancellation check ───
+async function isCancelled(db, batchId) {
+  const { data } = await db.from('content_batches').select('status').eq('id', batchId).single()
+  return data?.status === 'cancelled'
+}
+
 // ─── Main Inngest function ───
 export const runContentBatch = inngest.createFunction(
   { id: 'run-content-batch', retries: 0, triggers: [{ event: 'content/batch.run' }] },
@@ -294,6 +300,8 @@ export const runContentBatch = inngest.createFunction(
       return { page: pageData, keys: { apifyKey, anthropicKey, kieKey } }
     })
 
+    if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
+
     // Scrape competitor posts
     const scrapedPosts = await step.run('scrape', async () => {
       await setProgress(db, batchId, 'scrape', 10, `Scraping competitor pages (last ${timeWindowHours}h)...`)
@@ -307,6 +315,8 @@ export const runContentBatch = inngest.createFunction(
       await setProgress(db, batchId, 'scrape', 25, `Scraped ${raw.length} posts in last ${timeWindowHours}h · cost $${costUsd.toFixed(4)} · selected top ${scored.length}`)
       return scored
     })
+
+    if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
 
     // Create post records
     const postIds = await step.run('create-posts', async () => {
@@ -335,12 +345,16 @@ export const runContentBatch = inngest.createFunction(
       })
     }
 
+    if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
+
     // Process each post
     const processedPosts = []
     for (let i = 0; i < scrapedPosts.length; i++) {
       const post = scrapedPosts[i]
       const postId = postIds[i]
       if (!postId) continue
+
+      if (await isCancelled(db, batchId)) return { batchId, cancelled: true }
 
       const pct = 30 + Math.round((i / scrapedPosts.length) * 55)
       await setProgress(db, batchId, 'generate', pct, `Processing post ${i + 1} of ${scrapedPosts.length}...`)

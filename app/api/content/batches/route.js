@@ -20,6 +20,32 @@ async function getUser(request) {
   return user
 }
 
+// DELETE — cancel a queued or running batch
+export async function DELETE(request) {
+  const user = await getUser(request)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(request.url)
+  const batchId = searchParams.get('batchId')
+  if (!batchId) return NextResponse.json({ error: 'Missing batchId' }, { status: 400 })
+
+  const db = svc()
+  const { data: batch } = await db.from('content_batches').select('id, status').eq('id', batchId).eq('user_id', user.id).single()
+  if (!batch) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (batch.status === 'done' || batch.status === 'cancelled' || batch.status === 'error') {
+    return NextResponse.json({ error: 'Batch is already finished' }, { status: 400 })
+  }
+
+  const { error } = await db.from('content_batches').update({
+    status: 'cancelled',
+    progress_message: 'Cancelled by user',
+    updated_at: new Date().toISOString(),
+  }).eq('id', batchId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ success: true })
+}
+
 // GET — list batches for a page
 export async function GET(request) {
   const user = await getUser(request)
