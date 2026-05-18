@@ -339,14 +339,13 @@ function BatchProgress({ batch }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
         <span className={isError ? 'text-red-400' : isCancelled ? 'text-gray-400' : isDone ? 'text-emerald-400' : 'text-purple-400'}>
-          {isError ? '✗ Error' : isCancelled ? '⊘ Cancelled' : isDone ? '✓ Done' : batch.progress_message || 'Processing...'}
+          {isError ? `✗ ${batch.progress_message || 'Error'}` : isCancelled ? '⊘ Cancelled' : isDone ? '✓ Done' : batch.progress_message || 'Processing...'}
         </span>
         <span className="text-gray-500">{pct}%</span>
       </div>
       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${isError ? 'bg-red-500' : isCancelled ? 'bg-gray-600' : isDone ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${pct}%` }} />
       </div>
-      {isError && batch.error_message && <p className="text-xs text-red-400">{batch.error_message}</p>}
     </div>
   )
 }
@@ -794,6 +793,9 @@ export default function ContentDashboard({ supabase, session }) {
                         </div>
                       </div>
                       {isActive && <BatchProgress batch={b} />}
+                    {b.status === 'error' && b.progress_message && (
+                      <p className="text-xs text-red-400 mt-1">✗ {b.progress_message}</p>
+                    )}
                     </div>
                   )
                 })}
