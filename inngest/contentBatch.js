@@ -162,24 +162,25 @@ async function generateImage(kieKey, prompt, aspectRatio = '1:1') {
   const taskId = createData.data?.taskId
   if (!taskId) throw new Error(`Kie.ai: no taskId in response: ${JSON.stringify(createData).slice(0, 300)}`)
 
-  // Poll for completion (max 3 minutes) — successFlag: 0=generating, 1=success, 2/3=failed
-  for (let attempt = 0; attempt < 36; attempt++) {
+  // Poll for completion (max 6 minutes) — successFlag: 0=generating, 1=success, 2/3=failed
+  for (let attempt = 0; attempt < 72; attempt++) {
     await new Promise(r => setTimeout(r, 5000))
     const statusRes = await fetch(`https://api.kie.ai/api/v1/flux/kontext/record-info?taskId=${taskId}`, {
       headers: { 'Authorization': `Bearer ${kieKey}` },
     })
     if (!statusRes.ok) continue
     const statusData = await statusRes.json()
-    const flag = statusData.data?.successFlag
-    if (flag === 1) {
+    const flag = statusData.data?.successFlag ?? statusData.successFlag
+    if (flag === 1 || flag === '1') {
       const d = statusData.data || {}
       const imageUrl = d.resultImageUrl || d.originImageUrl || d.imageUrl || d.url
         || d.images?.[0] || d.output?.imageUrl || d.output?.url
       if (imageUrl) return imageUrl
-      throw new Error(`Kie.ai: succeeded but no image URL. Response: ${JSON.stringify(statusData).slice(0, 400)}`)
+      // Dump all keys to find the right field
+      throw new Error(`Kie.ai: succeeded but no image URL. Keys: ${JSON.stringify(Object.keys(d))} Full: ${JSON.stringify(statusData).slice(0, 800)}`)
     }
-    if (flag === 2 || flag === 3) {
-      throw new Error(`Kie.ai generation failed: ${JSON.stringify(statusData).slice(0, 200)}`)
+    if (flag === 2 || flag === 3 || flag === '2' || flag === '3') {
+      throw new Error(`Kie.ai generation failed: ${JSON.stringify(statusData).slice(0, 300)}`)
     }
   }
   throw new Error('Kie.ai image generation timed out')
