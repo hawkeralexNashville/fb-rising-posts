@@ -73,15 +73,16 @@ async function scrapeCompetitorPosts(apifyKey, pageUrls, timeWindowHours = 24, l
   if (!dataRes.ok) throw new Error('Apify: failed to fetch dataset items')
   const items = await dataRes.json()
 
-  // Filter by time window
+  // Filter by time window — cover all field names Apify uses across actor versions
   const cutoff = Date.now() - timeWindowHours * 60 * 60 * 1000
   const filtered = items.filter(p => {
-    const posted = p.timestamp || p.postedAt || p.date
+    const posted = p.time || p.timestamp || p.postedAt || p.date || p.createdTime || p.created_time || p.publishedAt
     if (!posted) return true // keep if no date info
-    return new Date(posted).getTime() >= cutoff
+    const ms = typeof posted === 'number' ? (posted < 1e12 ? posted * 1000 : posted) : new Date(posted).getTime()
+    return ms >= cutoff
   })
 
-  return { posts: filtered, costUsd }
+  return { posts: filtered, rawCount: items.length, costUsd }
 }
 
 // ─── Engagement score ───
@@ -302,14 +303,13 @@ export const runContentBatch = inngest.createFunction(
     // Scrape competitor posts
     const scrapedPosts = await step.run('scrape', async () => {
       await setProgress(db, batchId, 'scrape', 10, `Scraping ${page.competitor_urls.length} competitor page(s) (last ${timeWindowHours}h)...`)
-      const { posts: raw, costUsd } = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls, timeWindowHours)
-      // Store scrape cost immediately
+      const { posts: raw, rawCount, costUsd } = await scrapeCompetitorPosts(keys.apifyKey, page.competitor_urls, timeWindowHours)
       await updateBatch(db, batchId, { scrape_cost_usd: costUsd })
-      // Score and sort, take top 10
+      if (raw.length === 0) throw new Error(`Apify returned ${rawCount} posts but all were older than ${timeWindowHours}h. Try a wider time window or check that the competitor page is active.`)
       const scored = raw.map(p => ({ ...p, _engagementScore: engagementScore(p) }))
         .sort((a, b) => b._engagementScore - a._engagementScore)
         .slice(0, 10)
-      await setProgress(db, batchId, 'scrape', 25, `Scraped ${raw.length} posts in last ${timeWindowHours}h · cost $${costUsd.toFixed(4)} · selected top ${scored.length}`)
+      await setProgress(db, batchId, 'scrape', 25, `Apify: ${rawCount} total · ${raw.length} in last ${timeWindowHours}h · cost $${costUsd.toFixed(4)} · selected top ${scored.length}`)
       return scored
     })
 
