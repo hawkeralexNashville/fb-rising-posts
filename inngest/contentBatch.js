@@ -86,9 +86,14 @@ async function scrapeCompetitorPosts(apifyKey, pageUrls, timeWindowHours = 24, l
 
 // ─── Engagement score ───
 function engagementScore(post) {
-  const reactions = post.likesCount || post.reactions || 0
-  const comments = post.commentsCount || post.comments || 0
-  const shares = post.sharesCount || post.shares || 0
+  // Apify returns reactions as an object {like,love,haha,...} or a number
+  let reactions = 0
+  if (typeof post.reactions === 'number') reactions = post.reactions
+  else if (post.reactions && typeof post.reactions === 'object') reactions = Object.values(post.reactions).reduce((a, b) => a + (Number(b) || 0), 0)
+  reactions = reactions || post.reactionsCount || post.likesCount || post.likes || 0
+
+  const comments = post.commentsCount || post.numComments || post.comments || 0
+  const shares = post.sharesCount || post.numShares || post.shares || 0
   return reactions + (shares * 3) + (comments * 2)
 }
 
