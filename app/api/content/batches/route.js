@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { inngest } from '../../../inngest/client'
 
 function svc() {
   return createClient(
@@ -89,26 +90,12 @@ export async function POST(request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fire Inngest event
-  const eventKey = process.env.INNGEST_EVENT_KEY
-  if (!eventKey) {
-    await db.from('content_batches').update({ status: 'error', progress_message: 'Server misconfiguration: INNGEST_EVENT_KEY not set' }).eq('id', batch.id)
-    return NextResponse.json({ error: 'Server misconfiguration: INNGEST_EVENT_KEY not set' }, { status: 500 })
-  }
-
+  // Fire Inngest event via SDK
   try {
-    const eventRes = await fetch('https://inn.gs/e/' + eventKey, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'content/batch.run',
-        data: { batchId: batch.id, pageId, userId: user.id, timeWindowHours },
-      }),
+    await inngest.send({
+      name: 'content/batch.run',
+      data: { batchId: batch.id, pageId, userId: user.id, timeWindowHours },
     })
-    if (!eventRes.ok) {
-      const errText = await eventRes.text()
-      throw new Error(`Inngest rejected event: ${eventRes.status} ${errText.slice(0, 200)}`)
-    }
   } catch (err) {
     await db.from('content_batches').update({ status: 'error', progress_message: `Failed to queue batch: ${err.message}` }).eq('id', batch.id)
     return NextResponse.json({ error: `Failed to queue batch: ${err.message}` }, { status: 500 })
