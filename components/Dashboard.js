@@ -5,7 +5,6 @@ import Admin from './Admin'
 import ApifySetup from './ApifySetup'
 import TriageSetup from './TriageSetup'
 import TriageDashboard from './TriageDashboard'
-import ContentDashboard from './ContentDashboard'
 
 // ─── Platform Config ───
 const PLATFORMS = {
@@ -937,6 +936,37 @@ export default function Dashboard({ supabase, session }) {
 
   const selectedStream = streams.find((s) => s.id === selectedStreamId)
   const isScanning = ['starting', 'scanning', 'processing'].includes(scanStatus)
+
+  function exportPostsCSV(posts, label = 'rising-posts') {
+    const headers = ['Post URL', 'Page Name', 'Platform', 'Content Preview', 'Total Interactions', 'Reactions', 'Comments', 'Shares', 'Velocity (per hr)', 'Delta', 'Score', 'Tags', 'Posted At', 'Age (hrs)', 'Reason']
+    const rows = posts.map(p => [
+      p.post_url || '',
+      p.page_name || '',
+      p.platform || '',
+      (p.content_preview || '').replace(/\r?\n/g, ' '),
+      p.total_interactions ?? '',
+      p.reactions ?? '',
+      p.comments ?? '',
+      p.shares ?? '',
+      p.velocity != null ? p.velocity.toFixed(1) : '',
+      p.delta ?? '',
+      p.score != null ? p.score.toFixed(1) : '',
+      (p.tags || []).join(', '),
+      p.posted_at || '',
+      p.age_hours != null ? p.age_hours.toFixed(1) : '',
+      (p.reason || '').replace(/\r?\n/g, ' '),
+    ])
+    const csv = [headers, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${label}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
   const isQuickScanning = ['starting', 'scanning', 'processing'].includes(quickScanStatus)
 
   async function startPublicStreamScan() {
@@ -1123,25 +1153,6 @@ export default function Dashboard({ supabase, session }) {
             <span>Liked Posts</span>
             {likedPosts.length > 0 && <span className="ml-auto text-xs bg-rose-500/20 text-rose-400 rounded-full px-2 py-0.5">{likedPosts.length}</span>}
           </button>
-          {isOwner && (
-            <>
-              <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('triage'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
-                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'triage' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></svg>
-                <span>Content Triage</span>
-              </button>
-              <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('triage-setup'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
-                className={`flex items-center gap-2 w-full pl-9 pr-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${view === 'triage-setup' ? 'text-indigo-400' : 'text-gray-600 hover:text-gray-400'}`}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
-                Setup
-              </button>
-              <button onClick={() => { if (activeScanRef.current) { setBgScanRunning(activeScanRef.current.label); activeScanRef.current = null }; setView('content'); setSelectedStreamId(null); setSelectedSavedScan(null); setSelectedPublicStream(null) }}
-                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1 ${view === 'content' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                <span>Content</span>
-              </button>
-            </>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -1263,9 +1274,6 @@ export default function Dashboard({ supabase, session }) {
         </div>
         {view === 'account' && <Account supabase={supabase} session={session} settings={settings} setSettings={setSettings} saveSettings={saveSettings} timeWindow={timeWindow} setTimeWindow={setTimeWindow} minInteractions={minInteractions} setMinInteractions={setMinInteractions} maxInteractions={maxInteractions} setMaxInteractions={setMaxInteractions} groupMinComments={groupMinComments} setGroupMinComments={setGroupMinComments} groupMinReactions={groupMinReactions} setGroupMinReactions={setGroupMinReactions} streams={streams} savedScans={savedScans} apifyToken={apifyToken} saveApifyToken={saveApifyToken} />}
         {view === 'admin' && isAdmin && <Admin session={session} />}
-        {view === 'triage' && isOwner && <TriageDashboard supabase={supabase} session={session} onOpenSetup={() => setView('triage-setup')} />}
-        {view === 'triage-setup' && isOwner && <TriageSetup supabase={supabase} session={session} streams={streams} />}
-        {view === 'content' && isOwner && <ContentDashboard supabase={supabase} session={session} />}
 
         {/* ─── Recent Scans Grid ─── */}
         {view === 'recent' && (
@@ -1338,10 +1346,17 @@ export default function Dashboard({ supabase, session }) {
               {isQuickScanning && <ScanningAnimation />}
 
               {quickRisingPosts.length > 0 && (
-                <button onClick={() => createShare({ title: quickUrl.trim() || 'Quick Scan', posts: quickRisingPosts, scanMeta: { time_window: timeWindow, total_scraped: quickScanStats.totalScraped, cost_usd: quickScanStats.costUsd } })} disabled={sharingLoading}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50 mb-4">
-                  {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
-                </button>
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <button onClick={() => createShare({ title: quickUrl.trim() || 'Quick Scan', posts: quickRisingPosts, scanMeta: { time_window: timeWindow, total_scraped: quickScanStats.totalScraped, cost_usd: quickScanStats.costUsd } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                  <button onClick={() => exportPostsCSV(quickRisingPosts, 'quick-scan')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export CSV
+                  </button>
+                </div>
               )}
               <RisingPostsList posts={quickRisingPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />
               {quickScanStatus === 'done' && quickRisingPosts.length === 0 && (
@@ -1369,10 +1384,17 @@ export default function Dashboard({ supabase, session }) {
                   {Icons.zap} Run This Scan Again
                 </button>
                 {selectedSavedScan.results?.length > 0 && (
-                  <button onClick={() => createShare({ title: selectedSavedScan.name, posts: selectedSavedScan.results, scanMeta: { time_window: selectedSavedScan.time_window, total_scraped: selectedSavedScan.total_scraped, cost_usd: selectedSavedScan.cost_usd, scan_type: selectedSavedScan.scan_type } })} disabled={sharingLoading}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
-                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
-                  </button>
+                  <>
+                    <button onClick={() => createShare({ title: selectedSavedScan.name, posts: selectedSavedScan.results, scanMeta: { time_window: selectedSavedScan.time_window, total_scraped: selectedSavedScan.total_scraped, cost_usd: selectedSavedScan.cost_usd, scan_type: selectedSavedScan.scan_type } })} disabled={sharingLoading}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                      {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                    </button>
+                    <button onClick={() => exportPostsCSV(selectedSavedScan.results, selectedSavedScan.name || 'saved-scan')}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition-colors">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Export CSV
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -1903,6 +1925,11 @@ export default function Dashboard({ supabase, session }) {
                       <span>🎯</span> {relevanceScoring ? 'Scoring relevance…' : `Score Relevance (${risingPosts.length} posts)`}
                     </button>
                   )}
+                  <button onClick={() => exportPostsCSV(risingPosts, selectedStream?.name || 'rising-posts')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export CSV
+                  </button>
                   {relevanceStats && (
                     <>
                       <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2">
@@ -2015,10 +2042,17 @@ export default function Dashboard({ supabase, session }) {
               {isScanning && <ScanningAnimation />}
 
               {risingPosts.length > 0 && (
-                <button onClick={() => createShare({ title: selectedPublicStream?.name || 'Public Stream Scan', posts: risingPosts, scanMeta: { time_window: timeWindow, total_scraped: scanStats.totalScraped, cost_usd: scanStats.costUsd } })} disabled={sharingLoading}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50 mb-4">
-                  {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
-                </button>
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <button onClick={() => createShare({ title: selectedPublicStream?.name || 'Public Stream Scan', posts: risingPosts, scanMeta: { time_window: timeWindow, total_scraped: scanStats.totalScraped, cost_usd: scanStats.costUsd } })} disabled={sharingLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-600 bg-gray-800 text-gray-300 hover:text-white hover:border-gray-500 transition-all disabled:opacity-50">
+                    {Icons.share} {sharingLoading ? 'Creating link…' : 'Share Results'}
+                  </button>
+                  <button onClick={() => exportPostsCSV(risingPosts, selectedPublicStream?.name || 'public-stream')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export CSV
+                  </button>
+                </div>
               )}
               {risingPosts.length > 0 && <RisingPostsList posts={risingPosts} session={session} likedPostIds={likedPostIds} onToggleLike={toggleLike} />}
               {scanStatus === 'done' && risingPosts.length === 0 && (
