@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://retro-pong.up.railway.app/sitemap.xml

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Retro Pong Online - Free Multiplayer Pong Game</title>
+    <meta
+      name="description"
+      content="Play free online multiplayer Pong with a retro CRT style. Auto-matchmaking, live leaderboard, and classic arcade gameplay in your browser."
+    />
+    <link rel="canonical" href="https://retro-pong.up.railway.app/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Retro Pong Online - Free Multiplayer Pong Game" />
+    <meta
+      property="og:description"
+      content="Play free online multiplayer Pong with a retro CRT style. Auto-matchmaking, live leaderboard, and classic arcade gameplay in your browser."
+    />
+    <meta property="og:url" content="https://retro-pong.up.railway.app/" />
+    <meta property="og:image" content="https://retro-pong.up.railway.app/og-image.svg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Retro Pong Online - Free Multiplayer Pong Game" />
+    <meta
+      name="twitter:description"
+      content="Play free online multiplayer Pong with a retro CRT style. Auto-matchmaking, live leaderboard, and classic arcade gameplay."
+    />
+    <meta name="twitter:image" content="https://retro-pong.up.railway.app/og-image.svg" />
+
+    <!-- Structured data: VideoGame -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Retro Pong Online",
+        "description": "Free online multiplayer Pong with a retro CRT style, auto-matchmaking, and a live leaderboard.",
+        "genre": ["Arcade", "Sports"],
+        "gamePlatform": "Web Browser",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "playMode": ["MultiPlayer", "SinglePlayer"],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- Account bar -->
+    <header class="account-bar">
+      <span id="account-name" class="account-name"></span>
+      <span id="account-logged-out">
+        <button id="btn-login" class="btn btn-small">Login</button>
+        <button id="btn-register" class="btn btn-small">Register</button>
+      </span>
+      <span id="account-logged-in" class="hidden">
+        <button id="btn-logout" class="btn btn-small">Logout</button>
+      </span>
+    </header>
+
+    <main>
+      <!-- LANDING -->
+      <section id="screen-landing" class="screen active">
+        <h1 class="title">RETRO PONG</h1>
+        <p class="tagline">
+          Free online multiplayer Pong with a retro CRT vibe. Get auto-matched, race to
+          7 points, and climb the all-time leaderboard.
+        </p>
+        <div class="menu-buttons">
+          <button id="btn-play-online" class="btn btn-large">Play Online</button>
+          <button id="btn-play-computer" class="btn btn-large">Play vs Computer</button>
+        </div>
+
+        <section class="leaderboard-section" aria-label="Leaderboard">
+          <h2>Leaderboard</h2>
+          <table class="leaderboard">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Username</th>
+                <th>Points</th>
+                <th>Wins</th>
+                <th>Games</th>
+              </tr>
+            </thead>
+            <tbody class="leaderboard-body"></tbody>
+          </table>
+        </section>
+      </section>
+
+      <!-- DIFFICULTY -->
+      <section id="screen-difficulty" class="screen">
+        <h2>Choose Difficulty</h2>
+        <div class="menu-buttons">
+          <button class="btn btn-large btn-difficulty" data-difficulty="easy">Easy</button>
+          <button class="btn btn-large btn-difficulty" data-difficulty="medium">Medium</button>
+          <button class="btn btn-large btn-difficulty" data-difficulty="hard">Hard</button>
+        </div>
+        <button id="btn-difficulty-back" class="btn btn-small">Back</button>
+      </section>
+
+      <!-- WAITING / QUEUE -->
+      <section id="screen-waiting" class="screen">
+        <div id="waiting-status">
+          <h2 id="waiting-message" class="pulse">Waiting for opponent...</h2>
+          <button id="btn-cancel-queue" class="btn btn-small">Cancel</button>
+        </div>
+        <div id="waiting-actions" class="hidden">
+          <button id="btn-waiting-retry" class="btn btn-large">Try Again</button>
+          <button id="btn-waiting-back" class="btn btn-small">Back to Menu</button>
+        </div>
+
+        <section class="leaderboard-section" aria-label="Leaderboard">
+          <h2>Leaderboard</h2>
+          <table class="leaderboard">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Username</th>
+                <th>Points</th>
+                <th>Wins</th>
+                <th>Games</th>
+              </tr>
+            </thead>
+            <tbody class="leaderboard-body"></tbody>
+          </table>
+        </section>
+      </section>
+
+      <!-- GAME -->
+      <section id="screen-game" class="screen">
+        <div class="game-info">
+          <span id="opponent-label"></span>
+          <span id="controls-hint"></span>
+        </div>
+
+        <div class="crt">
+          <canvas id="game-canvas" width="800" height="500" role="img"
+            aria-label="Retro Pong game court: two white paddles and a ball on a black background.">
+            Your browser does not support the canvas element required to play Retro Pong.
+          </canvas>
+          <div class="crt-scanlines" aria-hidden="true"></div>
+          <div class="crt-vignette" aria-hidden="true"></div>
+          <div class="crt-flicker" aria-hidden="true"></div>
+
+          <!-- Reconnecting overlay -->
+          <div id="reconnecting" class="canvas-overlay">
+            <p class="pulse">Reconnecting...</p>
+          </div>
+
+          <!-- Game over overlay -->
+          <div id="gameover" class="canvas-overlay">
+            <h2 id="gameover-title">YOU WIN</h2>
+            <p id="gameover-detail"></p>
+            <p id="guest-prompt" class="guest-prompt hidden"></p>
+            <div class="overlay-buttons">
+              <button id="btn-play-again" class="btn">Play Again</button>
+              <button id="btn-gameover-register" class="btn">Create Account</button>
+              <button id="btn-menu" class="btn">Menu</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- LOGIN MODAL -->
+    <div id="modal-login" class="modal-overlay">
+      <div class="modal">
+        <button class="modal-close" aria-label="Close">X</button>
+        <h2>Login</h2>
+        <form id="login-form">
+          <label for="login-username">Username</label>
+          <input id="login-username" type="text" autocomplete="username" maxlength="20" />
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" />
+          <p id="login-error" class="form-error"></p>
+          <button type="submit" class="btn btn-large">Login</button>
+        </form>
+        <p class="modal-switch">
+          No account? <button class="link switch-to-register">Register</button>
+        </p>
+      </div>
+    </div>
+
+    <!-- REGISTER MODAL -->
+    <div id="modal-register" class="modal-overlay">
+      <div class="modal">
+        <button class="modal-close" aria-label="Close">X</button>
+        <h2>Register</h2>
+        <form id="register-form">
+          <label for="register-username">Username</label>
+          <input id="register-username" type="text" autocomplete="username" maxlength="20" />
+          <label for="register-password">Password</label>
+          <input id="register-password" type="password" autocomplete="new-password" />
+          <p class="form-hint">3-20 letters, numbers, or underscores. Password min 8 chars.</p>
+          <p id="register-error" class="form-error"></p>
+          <button type="submit" class="btn btn-large">Create Account</button>
+        </form>
+        <p class="modal-switch">
+          Have an account? <button class="link switch-to-login">Login</button>
+        </p>
+      </div>
+    </div>
+
+    <script src="/engine.js"></script>
+    <script src="/game.js"></script>
+    <script src="/ui.js"></script>
+  </body>
+</html>
